@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="h4 mb-0">{{ title }}</h1><div class="range-note">{{ rng.note }}</div></div>
+  <div class="head-actions">{% include "erp/_range_select.html" %}<a href="{% url kind|add:'_new' %}" class="btn btn-primary btn-sm" title="New {{ kind }}"><i class="bi bi-plus-lg"></i> New {{ kind }}</a></div>
+</div>
+<form method="get" id="flt" class="mb-3">
+  {% if rng.key != 'all' or request.GET.range %}<input type="hidden" name="range" value="{{ rng.key }}">{% endif %}
+  {% if request.GET.from %}<input type="hidden" name="from" value="{{ request.GET.from }}">{% endif %}{% if request.GET.to %}<input type="hidden" name="to" value="{{ request.GET.to }}">{% endif %}
+  <div class="d-flex gap-2 align-items-center">
+    <div class="search-box flex-grow-1"><i class="bi bi-search"></i><input name="q" class="form-control" placeholder="Search {% if kind == 'sale' %}customer{% else %}vendor{% endif %}, number…" value="{{ request.GET.q }}"></div>
+    <button type="button" class="btn btn-outline-secondary filter-btn d-md-none" data-bs-toggle="offcanvas" data-bs-target="#filterSheet" aria-label="Filters"><i class="bi bi-funnel"></i>{% if filters_active %}<span class="fbadge">{{ filters_active }}</span>{% endif %}</button>
+    <div class="offcanvas-md offcanvas-bottom filter-sheet" tabindex="-1" id="filterSheet" aria-label="Filters">
+      <div class="offcanvas-header d-md-none">
+        <h5 class="offcanvas-title">Filters</h5>
+        <a class="clear-link" href="?{{ clear_qs }}">Clear</a>
+      </div>
+      <div class="offcanvas-body d-md-flex align-items-center gap-2 p-md-0">
+        <div class="mb-3 mb-md-0"><label class="form-label d-md-none">{% if kind == 'sale' %}Customer{% else %}Vendor{% endif %}</label>
+          <select name="party" class="form-select">
+            <option value="">All {% if kind == 'sale' %}customers{% else %}vendors{% endif %}</option>{% for p in parties %}<option value="{{ p.pk }}" {% if request.GET.party == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+          </select></div>
+        <div class="mb-3 mb-md-0"><label class="form-label d-md-none">Status</label>
+          <div class="seg">
+            <input type="radio" class="btn-check" name="status" id="st-all" value="" {% if not request.GET.status %}checked{% endif %}><label for="st-all">All</label>
+            <input type="radio" class="btn-check" name="status" id="st-unpaid" value="unpaid" {% if request.GET.status == 'unpaid' %}checked{% endif %}><label for="st-unpaid">Unpaid</label>
+            <input type="radio" class="btn-check" name="status" id="st-paid" value="paid" {% if request.GET.status == 'paid' %}checked{% endif %}><label for="st-paid">Paid</label>
+          </div></div>
+        <button class="btn btn-primary w-100 d-md-none">Show results</button>
+      </div>
+    </div>
+  </div>
+</form>
+<script>
+document.getElementById('flt').addEventListener('change', function () {
+  if (window.matchMedia('(min-width: 768px)').matches) this.submit();   // desktop: filter instantly; phone: wait for "Show results"
+});
+</script>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>No.</th><th class="d-none d-md-table-cell">Date</th><th>{% if kind == 'sale' %}Customer{% else %}Vendor{% endif %}</th><th class="num">Total</th><th class="num d-none d-md-table-cell">Paid</th><th class="num d-none d-md-table-cell">Balance</th><th class="d-none d-md-table-cell">Status</th></tr></thead>
+  <tbody>{% for i in page %}<tr onclick="location='{% url kind|add:'_detail' i.pk %}'" style="cursor:pointer">
+    <td class="text-nowrap"><a href="{% url kind|add:'_detail' i.pk %}">{{ i.code }}</a></td><td class="d-none d-md-table-cell text-nowrap">{{ i.date|date:"d M Y" }}</td><td>{{ i.party.name }}<div class="d-md-none small text-muted">{{ i.date|date:"d M Y" }}</div></td>
+    <td class="num">{{ i.total|money }}<div class="d-md-none"><span class="badge text-bg-{% if i.status == 'Paid' %}success{% elif i.status == 'Partial' %}warning{% else %}secondary{% endif %}">{{ i.status }}</span></div></td><td class="num d-none d-md-table-cell">{{ i.paid_total|money }}</td><td class="num d-none d-md-table-cell">{{ i.due|money }}</td>
+    <td class="d-none d-md-table-cell"><span class="badge text-bg-{% if i.status == 'Paid' %}success{% elif i.status == 'Partial' %}warning{% else %}secondary{% endif %}">{{ i.status }}</span></td></tr>
+  {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Nothing found.</td></tr>{% endfor %}</tbody>
+  <tfoot class="table-light"><tr><th colspan="2" class="d-md-none">Total</th><th colspan="3" class="d-none d-md-table-cell">Total (all matching)</th><th class="num">{{ totals.total|money }}</th><th class="num d-none d-md-table-cell">{{ totals.paid|money }}</th><th class="num d-none d-md-table-cell">{{ totals.due|money }}</th><th class="d-none d-md-table-cell"></th></tr></tfoot>
+</table></div></div>
+{% include "erp/_pagination.html" %}
+{% endblock %}

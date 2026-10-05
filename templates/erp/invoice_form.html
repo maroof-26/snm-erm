@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">{{ title }}{% if invoice.pk %} {{ invoice.code }}{% endif %}</h1>
+<form method="post" id="inv">{% csrf_token %}
+  {{ form.non_field_errors }}
+  <div class="card card-body mb-3"><div class="row g-3">
+    <div class="col-12 col-md-8">
+      <label class="form-label" for="{{ form.party.id_for_label }}">{{ form.party.label }}</label>
+      {{ form.party }}{% for e in form.party.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      {% if 'parties' in features %}<a class="small" href="{% url 'party_new' %}?kind={% if kind == 'sale' %}customer{% else %}vendor{% endif %}&next={{ request.get_full_path|urlencode }}"><i class="bi bi-plus-circle"></i> New {% if kind == 'sale' %}customer{% else %}vendor{% endif %} not in list?</a>{% endif %}
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="form-label" for="{{ form.date.id_for_label }}">Date</label>{{ form.date }}{% for e in form.date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+    {% if form.warehouse %}<div class="col-12 col-md-6"><label class="form-label" for="{{ form.warehouse.id_for_label }}">{{ form.warehouse.label }}</label>{{ form.warehouse }}{% for e in form.warehouse.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% endif %}
+  </div></div>
+  <h2 class="h6">Items</h2>
+  {{ formset.management_form }}{{ formset.non_form_errors }}
+  <div id="rows" class="d-grid gap-2 mb-2">
+    {% for f in formset %}{% include "erp/_item_row.html" with f=f %}{% endfor %}
+  </div>
+  <template id="empty">{% include "erp/_item_row.html" with f=formset.empty_form %}</template>
+  <button type="button" class="btn btn-outline-primary mb-3" id="add"><i class="bi bi-plus-lg"></i> Add another item</button>
+  <div class="card card-body mb-3">
+    <div class="d-flex justify-content-between align-items-center"><span class="fs-5">Total</span><span class="fs-4 fw-bold">{{ currency }} <span id="total">0.00</span></span></div>
+    {% if form.paid_now %}
+    <hr>
+    <div class="row g-3 align-items-end">
+      <div class="col-12 col-md-5"><label class="form-label" for="{{ form.paid_now.id_for_label }}">{% if kind == 'sale' %}Money received now{% else %}Money paid now{% endif %} <span class="text-muted fw-normal">(if any)</span></label>
+        <div class="input-group">{{ form.paid_now }}<button type="button" class="btn btn-outline-success" id="full">Full amount</button></div>
+        {% for e in form.paid_now.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+      <div class="col-12 col-md-4"><label class="form-label" for="{{ form.method.id_for_label }}">How</label>{{ form.method }}</div>
+    </div>
+    {% endif %}
+    <a class="small mt-3" data-bs-toggle="collapse" href="#more" role="button"><i class="bi bi-chevron-down"></i> More options (due date, notes)</a>
+    <div class="collapse {% if form.due_date.errors or form.due_date.value or form.notes.value %}show{% endif %} mt-2" id="more"><div class="row g-3">
+      <div class="col-12 col-md-4"><label class="form-label" for="{{ form.due_date.id_for_label }}">Payment due date</label>{{ form.due_date }}</div>
+      <div class="col-12 col-md-8"><label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>{{ form.notes }}</div>
+    </div></div>
+  </div>
+  <div class="d-flex gap-2"><button class="btn btn-primary btn-lg flex-grow-1 flex-md-grow-0 px-md-5">Save {{ kind }}</button><a class="btn btn-outline-secondary btn-lg" href="{% if invoice.pk %}{% url kind|add:'_detail' invoice.pk %}{% else %}{% url kind|add:'_list' %}{% endif %}">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const products = {{ products_json|safe }};
+const rows = document.getElementById('rows'), total = document.getElementById('total');
+const count = document.getElementById('id_items-TOTAL_FORMS');
+const num = v => parseFloat((v || '').replace(/,/g, '')) || 0;
+function recalc() {
+  let t = 0;
+  rows.querySelectorAll('.item-row').forEach(r => {
+    if (r.querySelector('[name$="-DELETE"]:checked')) return;
+    t += num(r.querySelector('[name$="-quantity"]').value) * num(r.querySelector('[name$="-rate"]').value);
+  });
+  window.grandTotal = t;
+  total.textContent = t.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+const liveRows = () => [...rows.querySelectorAll('.item-row')].filter(r => !r.classList.contains('d-none'));
+function syncRemoveButtons() {
+  const many = liveRows().length > 1;
+  rows.querySelectorAll('.item-remove').forEach(b => { b.style.display = many ? '' : 'none'; });
+}
+rows.addEventListener('click', e => {
+  const btn = e.target.closest('.item-remove'); if (!btn) return;
+  const row = btn.closest('.item-row');
+  row.querySelector('.item-del').checked = true; row.classList.add('d-none');
+  recalc(); syncRemoveButtons();
+});
+rows.addEventListener('input', recalc);
+rows.addEventListener('change', e => {
+  const row = e.target.closest('.item-row');
+  if (e.target.name && e.target.name.endsWith('-product') && products[e.target.value]) {
+    row.querySelector('[name$="-rate"]').value = products[e.target.value].rate.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    row.querySelector('[name$="-unit"]').value = products[e.target.value].unit;
+  }
+  recalc();
+});
+document.getElementById('add').onclick = () => {
+  const html = document.getElementById('empty').innerHTML.replaceAll('__prefix__', count.value);
+  rows.insertAdjacentHTML('beforeend', html);
+  count.value = parseInt(count.value) + 1;
+  syncRemoveButtons();
+};
+const full = document.getElementById('full');
+if (full) full.onclick = () => { document.getElementById('id_paid_now').value = (window.grandTotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); };
+recalc(); syncRemoveButtons();
+</script>
+{% endblock %}

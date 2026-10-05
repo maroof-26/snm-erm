@@ -1,0 +1,9 @@
+<div class="card card-body p-2 item-row"><div class="row g-2 align-items-end">
+  {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+  {% if f.DELETE %}<input type="checkbox" class="d-none item-del" name="{{ f.DELETE.html_name }}">
+  <button type="button" class="item-remove" aria-label="Remove this item" title="Remove this item"><i class="bi bi-x-lg"></i></button>{% endif %}
+  <div class="col-12 col-md-5"><label class="form-label small mb-0">Item</label>{{ f.product }}{{ f.product.errors }}</div>
+  <div class="col-3 col-md-2"><label class="form-label small mb-0">Qty</label>{{ f.quantity }}{{ f.quantity.errors }}</div>
+  <div class="col-5 col-md-2"><label class="form-label small mb-0">Unit</label>{{ f.unit }}</div>
+  <div class="col-4 col-md-3"><label class="form-label small mb-0">Rate</label>{{ f.rate }}{{ f.rate.errors }}</div>
+</div></div>

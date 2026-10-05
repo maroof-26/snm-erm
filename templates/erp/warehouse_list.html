@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div><a href="{% url 'stock_overview' %}" class="small">&larr; Stock</a><h1 class="h4 mb-0">Warehouses</h1></div>
+  <div class="head-actions"><a class="btn btn-primary btn-sm" href="{% url 'warehouse_new' %}"><i class="bi bi-plus-lg"></i> Add warehouse</a></div>
+</div>
+<p class="text-muted small">One warehouse is enough for most shops. Add more (godown, shop, branch) if you keep stock in several places and want to move stock between them.</p>
+<div class="card"><div class="table-responsive"><table class="table mb-0 align-middle">
+  <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+  <tbody>{% for w in object_list %}<tr>
+    <td>{{ w.name }}{% if w.is_default %} <span class="badge text-bg-primary">Main</span>{% endif %}</td>
+    <td>{% if w.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
+    <td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-secondary" href="{% url 'warehouse_edit' w.pk %}"><i class="bi bi-pencil"></i></a>
+      <a class="btn btn-sm btn-outline-danger" href="{% url 'warehouse_delete' w.pk %}"><i class="bi bi-trash"></i></a></td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

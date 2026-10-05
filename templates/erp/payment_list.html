@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="h4 mb-0">Payments</h1><div class="range-note">{{ rng.note }}</div></div>
+  <div class="head-actions">{% include "erp/_range_select.html" %}<a href="{% url 'payment_new' %}?direction=in" class="btn btn-success btn-sm" title="Receive money"><i class="bi bi-box-arrow-in-down"></i> Receive</a><a href="{% url 'payment_new' %}?direction=out" class="btn btn-outline-primary btn-sm" title="Pay money"><i class="bi bi-box-arrow-up"></i> Pay</a></div>
+</div>
+<div class="row g-2 mb-3">
+  <div class="col-6"><div class="card card-body py-2"><div class="small text-muted">Money received</div><div class="fw-semibold text-success">{{ currency }} {{ totals.in|money }}</div></div></div>
+  <div class="col-6"><div class="card card-body py-2"><div class="small text-muted">Money paid out</div><div class="fw-semibold">{{ currency }} {{ totals.out|money }}</div></div></div>
+</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>Date</th><th>Party</th><th class="d-none d-md-table-cell">Method</th><th class="d-none d-md-table-cell">Invoice</th><th class="num">Amount</th><th></th></tr></thead>
+  <tbody>{% for p in page %}<tr>
+    <td class="text-nowrap">{{ p.date|date:"d M y" }}</td><td>{{ p.party.name }}<div class="small text-muted d-md-none">{{ p.get_method_display }}</div></td>
+    <td class="d-none d-md-table-cell">{{ p.get_method_display }} {{ p.reference }}</td><td class="d-none d-md-table-cell">{{ p.invoice.code|default:"" }}</td>
+    <td class="num {% if p.direction == 'in' %}text-success{% endif %}">{% if p.direction == 'in' %}+{% else %}-{% endif %}{{ p.amount|money }}</td>
+    <td class="text-end text-nowrap"><span class="d-none d-md-inline"><a class="btn btn-sm btn-outline-secondary" href="{% url 'payment_edit' p.pk %}"><i class="bi bi-pencil"></i></a> <a class="btn btn-sm btn-outline-danger" href="{% url 'payment_delete' p.pk %}"><i class="bi bi-trash"></i></a></span>
+      {% url 'payment_edit' p.pk as eu %}{% url 'payment_delete' p.pk as du %}{% include "erp/_row_menu.html" with edit_url=eu delete_url=du %}</td></tr>
+  {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No payments.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "erp/_pagination.html" %}
+{% endblock %}

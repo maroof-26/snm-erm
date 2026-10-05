@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="h4 mb-0">{{ title }}</h1>
+  <a href="{% url 'party_new' %}{% if kind %}?kind={{ kind }}{% endif %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add {% if kind == 'vendor' %}vendor{% else %}customer{% endif %}</a>
+</div>
+<form class="row g-2 mb-3">
+  <div class="col"><input name="q" class="form-control form-control-sm" placeholder="Search name or phone" value="{{ request.GET.q }}"></div>
+  {% if kind %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
+  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">Search</button></div>
+</form>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>Name</th><th class="d-none d-md-table-cell">Type</th><th class="d-none d-md-table-cell">Phone</th><th class="num">Balance</th><th></th></tr></thead>
+  <tbody>{% for p in page %}
+    <tr>
+      <td>{{ p.name }}{% if not p.is_active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}<div class="d-md-none small text-muted">{{ p.phone }}</div></td>
+      <td class="d-none d-md-table-cell">{{ p.get_kind_display }}</td><td class="d-none d-md-table-cell">{{ p.phone }}</td>
+      <td class="num {% if p.balance > 0 %}text-success{% elif p.balance < 0 %}text-danger{% endif %}">{{ p.balance|abs_money }}{% if p.balance > 0 %}<div class="small">Lene hain</div>{% elif p.balance < 0 %}<div class="small">Dene hain</div>{% endif %}</td>
+      <td class="text-end text-nowrap">
+        {% if p.wa_text and p.phone %}{% wa_url p.phone p.wa_text as wa %}<a class="btn btn-sm btn-outline-success" href="{{ wa }}" target="_blank" title="Send reminder on WhatsApp"><i class="bi bi-whatsapp"></i></a>{% endif %}
+        <span class="d-none d-md-inline">{% if 'ledger' in features %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'ledger_party' p.pk %}" title="Ledger"><i class="bi bi-journal-text"></i></a>{% endif %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'party_edit' p.pk %}" title="Edit"><i class="bi bi-pencil"></i></a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'party_delete' p.pk %}" title="Delete"><i class="bi bi-trash"></i></a></span>
+        {% url 'party_edit' p.pk as eu %}{% url 'party_delete' p.pk as du %}{% url 'ledger_party' p.pk as lu %}
+        {% include "erp/_row_menu.html" with edit_url=eu delete_url=du ledger_url=lu %}
+      </td>
+    </tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">Nobody added yet. Tap the Add button above.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+<div class="small text-muted mt-2"><b>Lene hain</b> = they owe you &middot; <b>Dene hain</b> = you owe them</div>
+{% include "erp/_pagination.html" %}
+{% endblock %}

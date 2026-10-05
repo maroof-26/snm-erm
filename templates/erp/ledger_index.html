@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="h4 mb-0">Ledger <small class="text-muted fs-6 d-none d-sm-inline">(Khata)</small></h1><div class="range-note">{{ rng.note }}</div></div>
+  <div class="head-actions">{% include "erp/_range_select.html" %}<a href="{% url 'ledger_entry_new' %}" class="btn btn-primary btn-sm" title="Adjustment"><i class="bi bi-plus-lg"></i> Adjustment</a></div>
+</div>
+<div class="row g-2 mb-3">
+  <div class="col-6"><div class="card card-body py-2"><div class="small text-muted">To receive (Lene hain)</div><div class="fw-semibold text-success">{{ currency }} {{ receivable|money }}</div></div></div>
+  <div class="col-6"><div class="card card-body py-2"><div class="small text-muted">To pay (Dene hain)</div><div class="fw-semibold text-danger">{{ currency }} {{ payable|money }}</div></div></div>
+</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>Party</th><th class="num d-none d-md-table-cell">Opening</th><th class="num d-none d-md-table-cell">Debit</th><th class="num d-none d-md-table-cell">Credit</th><th class="num">Closing</th></tr></thead>
+  <tbody>{% for p in rows %}<tr onclick="location='{% url 'ledger_party' p.pk %}?{{ request.GET.urlencode }}'" style="cursor:pointer">
+    <td><a href="{% url 'ledger_party' p.pk %}?{{ request.GET.urlencode }}">{{ p.name }}</a></td>
+    <td class="num d-none d-md-table-cell">{{ p.opening|money }}</td><td class="num d-none d-md-table-cell">{{ p.debit|money }}</td><td class="num d-none d-md-table-cell">{{ p.credit|money }}</td>
+    <td class="num {% if p.closing > 0 %}text-success{% elif p.closing < 0 %}text-danger{% endif %}">{{ p.closing|abs_money }}{% if p.closing > 0 %}<div class="small">Lene hain</div>{% elif p.closing < 0 %}<div class="small">Dene hain</div>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No ledger activity.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+<div class="small text-muted mt-2"><b>Lene hain</b> = they owe you &middot; <b>Dene hain</b> = you owe them</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{# Icon-only date-range dropdown for page headers. Current range text: {{ rng.note }} (shown under the title). #}
+<div class="dropdown range-wrap">
+  <button type="button" class="btn btn-sm btn-outline-secondary range-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+          aria-label="Date range: {{ rng.note }}" title="{{ rng.note }}"><i class="bi bi-calendar3"></i></button>
+  <div class="dropdown-menu dropdown-menu-end range-menu">
+    {% for key, label in presets %}<a class="dropdown-item {% if rng.key == key %}active{% endif %}" href="?range={{ key }}{% if keep_qs %}&{{ keep_qs }}{% endif %}">{{ label }}</a>{% endfor %}
+    <div class="dropdown-divider"></div>
+    <form method="get" class="px-3 pb-2 pt-1">
+      {% for k, v in keep %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+      <div class="small fw-semibold mb-1">Pick dates</div>
+      <div class="row g-2">
+        <div class="col-12"><label class="small text-muted mb-0">From</label><input type="date" name="from" class="form-control form-control-sm" value="{{ rng.start|date:'Y-m-d' }}" aria-label="From"></div>
+        <div class="col-12"><label class="small text-muted mb-0">To</label><input type="date" name="to" class="form-control form-control-sm" value="{{ rng.end|date:'Y-m-d' }}" aria-label="To"></div>
+        <div class="col-12"><button class="btn btn-sm btn-primary w-100">Show</button></div>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,9 @@
+{# mobile-only ⋮ menu: pass edit_url, delete_url and optional ledger_url #}
+<div class="dropdown d-md-none d-inline-block">
+  <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-label="More"><i class="bi bi-three-dots-vertical"></i></button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    {% if ledger_url %}<li><a class="dropdown-item" href="{{ ledger_url }}"><i class="bi bi-journal-text"></i> Ledger</a></li>{% endif %}
+    <li><a class="dropdown-item" href="{{ edit_url }}"><i class="bi bi-pencil"></i> Edit</a></li>
+    <li><a class="dropdown-item text-danger" href="{{ delete_url }}"><i class="bi bi-trash"></i> Delete</a></li>
+  </ul>
+</div>

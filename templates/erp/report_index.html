@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Reports</h1>
+<div class="row g-3">{% for r in reports %}
+  <div class="col-12 col-md-6 col-xl-4"><a href="{% url 'report_view' r.slug %}" class="card h-100 text-decoration-none text-body"><div class="card-body">
+    <div class="fw-semibold"><i class="bi bi-file-earmark-pdf text-danger"></i> {{ r.title }}</div><div class="small text-muted">{{ r.description }}</div></div></a></div>
+{% endfor %}</div>
+{% endblock %}

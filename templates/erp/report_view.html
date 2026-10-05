@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div><a href="{% url 'report_index' %}" class="small">&larr; Reports</a><h1 class="h4 mb-0">{{ definition.title }}</h1><div class="range-note">{{ rng.note }}</div></div>
+  <div class="head-actions">{% include "erp/_range_select.html" %}</div>
+</div>
+{% if report %}<div class="d-flex gap-1 mb-3">
+  <a class="btn btn-sm btn-primary" target="_blank" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}format=pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+  <a class="btn btn-sm btn-outline-secondary" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}format=csv"><i class="bi bi-filetype-csv"></i> CSV</a></div>{% endif %}
+
+{% if parties is not None %}
+<form class="mb-3 d-flex gap-2">
+  {% for k, v in keep %}{% if k != 'party' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  {% if rng.key == 'custom' %}<input type="hidden" name="from" value="{{ rng.start|date:'Y-m-d' }}"><input type="hidden" name="to" value="{{ rng.end|date:'Y-m-d' }}">{% else %}<input type="hidden" name="range" value="{{ rng.key }}">{% endif %}
+  <select name="party" class="form-select" onchange="this.form.submit()"><option value="">Select party...</option>{% for p in parties %}<option value="{{ p.pk }}" {% if party and party.pk == p.pk %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+</form>
+{% endif %}
+{% if report %}
+<div class="card"><div class="table-responsive"><table class="table mb-0 align-middle report-table">
+  <thead><tr>{% for c, r in table.head %}<th {% if r %}class="num"{% endif %}>{{ c }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for row in table.rows %}<tr>{% for cell, r in row %}<td {% if r %}class="num"{% endif %}>{{ cell }}</td>{% endfor %}</tr>
+  {% empty %}<tr><td colspan="{{ table.head|length }}" class="text-center text-muted py-4">No data for this range.</td></tr>{% endfor %}</tbody>
+  {% if table.totals %}<tfoot class="table-light"><tr>{% for cell, r in table.totals %}<th {% if r %}class="num"{% endif %}>{{ cell }}</th>{% endfor %}</tr></tfoot>{% endif %}
+</table></div></div>
+{% else %}<div class="alert alert-info">Choose a party to view its ledger.</div>{% endif %}
+{% endblock %}

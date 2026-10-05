@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">{{ title }}</h1>
+<form method="post" class="card card-body" style="max-width:640px">{% csrf_token %}
+  {{ form.non_field_errors }}
+  {% for f in form %}{% if f.is_hidden %}{{ f }}{% else %}
+    <div class="mb-3" id="row-{{ f.name }}">
+      {% if f.field.widget.input_type == 'radio' %}<label class="form-label">{{ f.label }}</label>
+        <div class="seg">{% for r in f %}<input type="radio" class="btn-check" name="{{ r.data.name }}" id="{{ r.id_for_label }}" value="{{ r.data.value }}" {% if r.data.selected %}checked{% endif %} required><label for="{{ r.id_for_label }}">{{ r.choice_label }}</label>{% endfor %}</div>
+      {% else %}<label class="form-label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
+      {% if f.name == 'product' %}<div class="form-text fw-semibold" id="onhand"></div>{% endif %}
+      {% if f.help_text %}<div class="form-text">{{ f.help_text }}</div>{% endif %}
+      {% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+  {% endif %}{% endfor %}
+  <div class="d-flex gap-2"><button class="btn btn-primary">Save</button><a class="btn btn-outline-secondary" href="{% url cancel_url %}">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const levels = {{ levels_json|safe }};
+const prod = document.getElementById('id_product'), hint = document.getElementById('onhand');
+function showLevel() { const l = levels[prod.value]; hint.textContent = l ? 'In stock now: ' + l.qty.toLocaleString(undefined, {maximumFractionDigits: 3}) + ' ' + l.unit : ''; }
+prod.addEventListener('change', showLevel); showLevel();
+function syncMode() {
+  const m = document.querySelector('input[name=mode]:checked'); const mode = m ? m.value : '';
+  document.getElementById('row-unit_cost').style.display = (mode === 'add' || mode === '') ? '' : 'none';
+  const label = document.querySelector('label[for=id_quantity]'); label.textContent = mode === 'set' ? 'Counted quantity' : 'Quantity';
+  const reason = document.getElementById('id_reason'); if (mode === 'set') reason.value = 'Stock count';
+}
+document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', syncMode)); syncMode();
+</script>
+{% endblock %}

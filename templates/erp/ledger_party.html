@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><a href="{% url 'ledger' %}" class="small">&larr; Ledger</a><h1 class="h4 mb-0">{{ party.name }}</h1><div class="text-muted small">{{ party.phone }}</div><div class="range-note">{{ rng.note }}</div></div>
+  <div class="head-actions">{% include "erp/_range_select.html" %}</div>
+</div>
+<div class="action-row mb-3">
+    <a class="btn btn-sm btn-outline-primary" target="_blank" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}format=pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+    {% if wa_text and party.phone %}{% wa_url party.phone wa_text as wa %}<a class="btn btn-sm btn-success" target="_blank" href="{{ wa }}"><i class="bi bi-whatsapp"></i> Remind</a>{% endif %}
+    {% if 'payments' in features %}<a class="btn btn-sm btn-outline-success" href="{% url 'payment_new' %}?party={{ party.pk }}&direction={% if party.kind == 'vendor' %}out{% else %}in{% endif %}"><i class="bi bi-cash"></i> {% if party.kind == 'vendor' %}Pay{% else %}Receive<span class="d-none d-md-inline"> money</span>{% endif %}</a>{% endif %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ledger_entry_new' %}?party={{ party.pk }}"><i class="bi bi-plus-slash-minus"></i> Adjust<span class="d-none d-md-inline">ment</span></a>
+  </div>
+
+<div class="card ledger-card"><table class="table mb-0 align-middle ledger-table">
+  <thead><tr><th>Date</th><th class="d-none d-md-table-cell">Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th><th></th></tr></thead>
+  <tbody>
+    <tr class="table-light"><td class="text-muted"><span class="d-md-none">Opening</span></td><td class="d-none d-md-table-cell">Opening balance</td><td class="num" colspan="0"></td><td></td><td class="num"><span class="d-md-none">{{ st.opening|money_short }}</span><span class="d-none d-md-inline">{{ st.opening|money }}</span></td><td></td></tr>
+    {% for e, run in st.rows %}<tr class="ledger-row" role="button" tabindex="0"
+        data-type="{{ e.type_label }}" data-desc="{{ e.description }}" data-date="{{ e.date|date:'d M Y' }}"
+        data-debit="{{ e.debit|money }}" data-credit="{{ e.credit|money }}" data-balance="{{ run|money }}"
+        data-ref="{{ e.ref_code }}" data-url="{{ e.detail_url }}" data-delete="{% if e.kind == 'manual' %}{% url 'ledger_entry_delete' e.pk %}{% endif %}">
+      <td class="text-nowrap">{{ e.date|date:"d M" }}<span class="d-none d-md-inline"> {{ e.date|date:"y" }}</span></td>
+      <td class="d-none d-md-table-cell">{{ e.description }}</td>
+      <td class="num"><span class="d-md-none">{% if e.debit %}{{ e.debit|money_short }}{% else %}&ndash;{% endif %}</span><span class="d-none d-md-inline">{% if e.debit %}{{ e.debit|money }}{% endif %}</span></td>
+      <td class="num"><span class="d-md-none">{% if e.credit %}{{ e.credit|money_short }}{% else %}&ndash;{% endif %}</span><span class="d-none d-md-inline">{% if e.credit %}{{ e.credit|money }}{% endif %}</span></td>
+      <td class="num fw-semibold"><span class="d-md-none">{{ run|money_short }}</span><span class="d-none d-md-inline">{{ run|money }}</span></td>
+      <td class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary ledger-view" aria-label="View details"><i class="bi bi-eye"></i><span class="d-none d-md-inline"> Details</span></button></td>
+    </tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No entries in this range.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+
+<div class="ledger-totals">
+  <div><span class="lk">Total debit</span><b><span class="d-md-none">{{ st.debit|money_short }}</span><span class="d-none d-md-inline">{{ st.debit|money }}</span></b></div>
+  <div><span class="lk">Total credit</span><b><span class="d-md-none">{{ st.credit|money_short }}</span><span class="d-none d-md-inline">{{ st.credit|money }}</span></b></div>
+  <div><span class="lk">Balance</span><b class="{% if st.closing > 0 %}text-success{% elif st.closing < 0 %}text-danger{% endif %}"><span class="d-md-none">{{ st.closing|money_short }}</span><span class="d-none d-md-inline">{{ st.closing|money }}</span></b>
+    {% if st.closing > 0 %}<small class="lk">Lene hain</small>{% elif st.closing < 0 %}<small class="lk">Dene hain</small>{% endif %}</div>
+</div>
+<div class="small text-muted mt-2">Balance above zero = they owe you (Lene hain). Below zero = you owe them (Dene hain). Tap a row for full details.</div>
+
+<div class="modal fade" id="ledgerModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><div><div class="small text-muted" id="lm-type"></div><h5 class="modal-title" id="lm-desc"></h5></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+  <div class="modal-body">
+    <dl class="lm-grid">
+      <div><dt>Date</dt><dd id="lm-date"></dd></div>
+      <div id="lm-ref-wrap"><dt>Reference</dt><dd id="lm-ref"></dd></div>
+      <div><dt>Debit</dt><dd id="lm-debit"></dd></div>
+      <div><dt>Credit</dt><dd id="lm-credit"></dd></div>
+      <div class="lm-wide"><dt>Balance after this entry</dt><dd id="lm-balance" class="fs-5 fw-bold"></dd></div>
+    </dl>
+  </div>
+  <div class="modal-footer justify-content-between">
+    <a id="lm-delete" class="btn btn-outline-danger btn-sm" href="#"><i class="bi bi-trash"></i> Delete entry</a>
+    <span class="d-flex gap-2"><a id="lm-open" class="btn btn-primary btn-sm" href="#"><i class="bi bi-box-arrow-up-right"></i> Open invoice</a><button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button></span>
+  </div>
+</div></div></div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const modal = new bootstrap.Modal(document.getElementById('ledgerModal'));
+  const $ = id => document.getElementById(id);
+  function show(row) {
+    const d = row.dataset;
+    $('lm-type').textContent = d.type; $('lm-desc').textContent = d.desc; $('lm-date').textContent = d.date;
+    $('lm-debit').textContent = d.debit === '0.00' ? '–' : d.debit; $('lm-credit').textContent = d.credit === '0.00' ? '–' : d.credit; $('lm-balance').textContent = d.balance;
+    $('lm-ref').textContent = d.ref; $('lm-ref-wrap').style.display = d.ref ? '' : 'none';
+    $('lm-open').style.display = d.url ? '' : 'none'; if (d.url) $('lm-open').href = d.url;
+    $('lm-delete').style.display = d.delete ? '' : 'none'; if (d.delete) $('lm-delete').href = d.delete;
+    modal.show();
+  }
+  document.querySelectorAll('.ledger-row').forEach(r => {
+    r.addEventListener('click', () => show(r));
+    r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(r); } });
+  });
+});
+</script>
+{% endblock %}

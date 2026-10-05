@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head"><div><h1 class="h4 mb-0">Dashboard</h1><div class="range-note">{{ rng.note }}</div></div><div class="head-actions">{% include "erp/_range_select.html" %}</div></div>
+{% if 'stock' in features and low_stock_total %}
+<a class="alert alert-warning d-flex align-items-center gap-2 py-2 text-decoration-none" href="{% url 'stock_overview' %}?status=low"><i class="bi bi-exclamation-triangle-fill"></i>
+  <span><b>{{ low_stock_total }}</b> item{{ low_stock_total|pluralize }} low on stock. Tap to see.</span></a>
+{% endif %}
+{% if not setup_done %}
+<div class="card border-primary mb-3"><div class="card-body">
+  <h2 class="h6 mb-2">Get started in 3 steps</h2>
+  <div class="d-grid gap-2">
+    {% if 'products' in features %}<a class="btn {% if setup.products %}btn-outline-success{% else %}btn-primary{% endif %} text-start" href="{% url 'product_new' %}"><i class="bi {% if setup.products %}bi-check-circle-fill{% else %}bi-1-circle{% endif %}"></i> Add your products (what you sell)</a>{% endif %}
+    {% if 'parties' in features %}<a class="btn {% if setup.parties %}btn-outline-success{% else %}btn-primary{% endif %} text-start" href="{% url 'party_new' %}?kind=customer"><i class="bi {% if setup.parties %}bi-check-circle-fill{% else %}bi-2-circle{% endif %}"></i> Add a customer</a>{% endif %}
+    {% if 'sales' in features %}<a class="btn {% if setup.invoices %}btn-outline-success{% else %}btn-primary{% endif %} text-start" href="{% url 'sale_new' %}"><i class="bi {% if setup.invoices %}bi-check-circle-fill{% else %}bi-3-circle{% endif %}"></i> Make your first sale</a>{% endif %}
+  </div>
+</div></div>
+{% endif %}
+<div class="row g-2 g-md-3 mb-3">
+  {% if 'sales' in features %}<div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Sales</div><div class="value">{{ currency }} {{ sales_total|money }}</div></div></div></div>{% endif %}
+  {% if 'purchases' in features %}<div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Purchases</div><div class="value">{{ currency }} {{ purchases_total|money }}</div></div></div></div>{% endif %}
+  {% if 'payments' in features %}
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Money received</div><div class="value text-success">{{ currency }} {{ received|money }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Money paid out</div><div class="value">{{ currency }} {{ paid_out|money }}</div></div></div></div>
+  {% endif %}
+  <div class="col-6 col-lg-3"><div class="card stat h-100 border-success-subtle"><div class="card-body"><div class="text-muted small">To receive <span class="opacity-75">(Lene hain)</span></div><div class="value">{{ currency }} {{ receivable|money }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100 border-warning-subtle"><div class="card-body"><div class="text-muted small">To pay <span class="opacity-75">(Dene hain)</span></div><div class="value">{{ currency }} {{ payable|money }}</div></div></div></div>
+  {% if 'sales' in features %}<div class="col-12 col-lg-6"><div class="card stat h-100 border-danger-subtle"><div class="card-body"><div class="text-muted small">Late payments from customers</div><div class="value">{{ overdue_count }} <span class="fs-6 text-muted">| {{ currency }} {{ overdue_total|money }}</span></div></div></div></div>{% endif %}
+</div>
+<div class="row g-3">
+  <div class="col-12 col-xl-8"><div class="card"><div class="card-body"><h2 class="h6">Sales and purchases</h2><div style="height:260px"><canvas id="chart"></canvas></div></div></div></div>
+  <div class="col-12 col-xl-4"><div class="card h-100"><div class="card-body">
+    <h2 class="h6">Top customers</h2>
+    <ul class="list-group list-group-flush">{% for c in top_customers %}<li class="list-group-item d-flex justify-content-between px-0"><span>{{ c.party__name }}</span><span class="num">{{ c.t|money }}</span></li>{% empty %}<li class="list-group-item px-0 text-muted">No sales in range.</li>{% endfor %}</ul>
+  </div></div></div>
+  <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-body">
+    <h2 class="h6">Who owes you most</h2>
+    <ul class="list-group list-group-flush">{% for p in top_receivables %}<li class="list-group-item d-flex justify-content-between px-0">{% if 'ledger' in features %}<a href="{% url 'ledger_party' p.pk %}">{{ p.name }}</a>{% else %}<span>{{ p.name }}</span>{% endif %}<span class="num">{{ p.closing|money }}</span></li>{% empty %}<li class="list-group-item px-0 text-muted">Nothing outstanding.</li>{% endfor %}</ul>
+  </div></div></div>
+  {% if 'stock' in features and low_stock_items %}
+  <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-body">
+    <div class="d-flex justify-content-between"><h2 class="h6">Low on stock</h2><a class="small" href="{% url 'stock_overview' %}?status=low">View all</a></div>
+    <ul class="list-group list-group-flush">{% for p in low_stock_items %}<li class="list-group-item d-flex justify-content-between px-0"><a href="{% url 'stock_product' p.pk %}">{{ p.name }}</a>
+      <span class="num"><b class="{% if p.status == 'out' %}text-danger{% endif %}">{{ p.on_hand|qty }}</b> <small class="text-muted">{{ p.unit.symbol }}</small></span></li>{% endfor %}</ul>
+  </div></div></div>
+  {% endif %}
+  {% if 'sales' in features %}
+  <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-body">
+    <h2 class="h6">Recent sales</h2>
+    <ul class="list-group list-group-flush">{% for i in recent_sales %}<li class="list-group-item d-flex justify-content-between px-0"><a href="{% url 'sale_detail' i.pk %}">{{ i.code }} <span class="text-muted">{{ i.party.name }}</span></a><span class="num">{{ i.total|money }}</span></li>{% empty %}<li class="list-group-item px-0 text-muted">No sales yet.</li>{% endfor %}</ul>
+  </div></div></div>
+  {% endif %}
+</div>
+{{ chart_json|json_script:"chart-data" }}
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+const d = JSON.parse(document.getElementById('chart-data').textContent);
+const datasets = [];
+{% if 'sales' in features %}datasets.push({label: 'Sales', data: d.sales, backgroundColor: '#1d3a72', borderRadius: 4});{% endif %}
+{% if 'purchases' in features %}datasets.push({label: 'Purchases', data: d.purchases, backgroundColor: '#8a97b3', borderRadius: 4});{% endif %}
+new Chart(document.getElementById('chart'), {type: 'bar', data: {labels: d.labels, datasets}, options: {maintainAspectRatio: false, scales: {y: {beginAtZero: true}}}});
+</script>
+{% endblock %}

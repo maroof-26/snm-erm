@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><a href="{% url 'stock_overview' %}" class="small">&larr; Stock</a>
+    <h1 class="h4 mb-0">{{ product.name }}{% if s %} {% if s.status == 'out' %}<span class="badge text-bg-danger fs-6">{% if s.on_hand < 0 %}Below zero{% else %}Out of stock{% endif %}</span>{% elif s.status == 'low' %}<span class="badge text-bg-warning fs-6">Low</span>{% endif %}{% endif %}</h1>
+    <div class="range-note">{% if wh %}{{ wh.name }} · {% endif %}{{ rng.note }}</div></div>
+  <div class="head-actions">{% include "erp/_range_select.html" %}</div>
+</div>
+<div class="action-row mb-3">
+  <a class="btn btn-sm btn-primary" href="{% url 'stock_adjust' %}?product={{ product.pk }}"><i class="bi bi-plus-slash-minus"></i> Adjust</a>
+  {% if many %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'stock_transfer' %}?product={{ product.pk }}"><i class="bi bi-truck"></i> Transfer</a>{% endif %}
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'product_edit' product.pk %}"><i class="bi bi-pencil"></i> Item</a>
+</div>
+{% if s %}
+<div class="row g-2 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">In stock</div><div class="value">{{ s.on_hand|qty }} <small class="text-muted">{{ product.unit.symbol }}</small></div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Low-stock alert at</div><div class="value">{% if s.reorder_level %}{{ s.reorder_level|qty }}{% else %}&ndash;{% endif %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Avg cost</div><div class="value">{% if s.avg_cost is not None %}{{ currency }} {{ s.avg_cost|money_short }}{% else %}&ndash;{% endif %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Stock value</div><div class="value">{{ currency }} {{ s.value|money_short }}</div></div></div></div>
+</div>
+{% endif %}
+{% if many and breakdown %}<div class="d-flex gap-2 flex-wrap mb-3">{% for b in breakdown %}<span class="chipx">{{ b.warehouse__name }}: <b>{{ b.q|qty }}</b> {{ product.unit.symbol }}</span>{% endfor %}</div>{% endif %}
+
+<div class="card ledger-card"><table class="table mb-0 align-middle ledger-table">
+  <thead><tr><th>Date</th><th>Details</th><th class="num d-none d-md-table-cell">In</th><th class="num d-none d-md-table-cell">Out</th><th class="num d-md-none">Change</th><th class="num">Balance</th><th></th></tr></thead>
+  <tbody>
+    <tr class="table-light"><td></td><td class="text-muted">Opening</td><td class="d-none d-md-table-cell"></td><td class="d-none d-md-table-cell"></td><td class="d-md-none"></td><td class="num">{{ card.opening|qty }}</td><td></td></tr>
+    {% for m, run in card.rows %}<tr>
+      <td class="text-nowrap">{{ m.date|date:"d M" }}<span class="d-none d-md-inline"> {{ m.date|date:"y" }}</span></td>
+      <td><span class="badge {% if m.kind == 'sale' or m.kind == 'adjust_out' or m.kind == 'transfer_out' %}text-bg-secondary{% elif m.kind == 'purchase' %}text-bg-primary{% else %}text-bg-info{% endif %}">{{ m.get_kind_display }}</span>
+        {% if m.detail_url %}<a href="{{ m.detail_url }}" class="ms-1">{{ m.ref_code }}</a>{% elif m.ref_code %}<span class="ms-1">{{ m.ref_code }}</span>{% endif %}
+        {% if m.note or m.reason and m.reason != m.get_kind_display %}<div class="small text-muted">{% if m.reason != m.get_kind_display %}{{ m.reason }}{% endif %}{% if m.reason and m.note and m.reason != m.get_kind_display %} · {% endif %}{{ m.note }}</div>{% endif %}
+        {% if many %}<div class="small text-muted">{{ m.warehouse.name }}</div>{% endif %}</td>
+      <td class="num d-none d-md-table-cell text-success">{% if m.quantity > 0 %}+{{ m.quantity|qty }}{% endif %}</td>
+      <td class="num d-none d-md-table-cell text-danger">{% if m.quantity < 0 %}&minus;{{ m.qty_out|qty }}{% endif %}</td>
+      <td class="num d-md-none {% if m.quantity > 0 %}text-success{% else %}text-danger{% endif %}">{% if m.quantity > 0 %}+{{ m.quantity|qty }}{% else %}&minus;{{ m.qty_out|qty }}{% endif %}</td>
+      <td class="num fw-semibold">{{ run|qty }}</td>
+      <td class="text-end">{% if m.kind != 'sale' and m.kind != 'purchase' %}<a class="text-danger" href="{% url 'stock_move_delete' m.pk %}" title="Delete this entry"><i class="bi bi-trash"></i></a>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="7" class="text-center text-muted py-4">No stock moves in this range.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+<div class="ledger-totals">
+  <div><span class="lk">Total in</span><b class="text-success">{{ card.total_in|qty }}</b></div>
+  <div><span class="lk">Total out</span><b class="text-danger">{{ card.total_out|qty }}</b></div>
+  <div><span class="lk">In stock</span><b>{{ card.closing|qty }} {{ product.unit.symbol }}</b></div>
+</div>
+{% endblock %}

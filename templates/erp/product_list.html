@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Products</h1>
+  <a href="{% url 'product_new' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Add</a>
+</div>
+<form class="d-flex gap-2 mb-3"><input name="q" class="form-control form-control-sm" placeholder="Search" value="{{ request.GET.q }}"><button class="btn btn-sm btn-outline-secondary">Search</button></form>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>Name</th><th class="d-none d-md-table-cell">SKU</th><th>Unit</th>{% if show_stock %}<th class="num">In stock</th>{% endif %}<th class="num">Rate</th><th></th></tr></thead>
+  <tbody>{% for p in page %}<tr>
+    <td>{{ p.name }}{% if not p.is_active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}</td>
+    <td class="d-none d-md-table-cell">{{ p.sku }}</td><td>{{ p.unit.symbol }}</td>{% if show_stock %}<td class="num">{% if p.stock_row %}<b class="{% if p.stock_row.status == 'out' %}text-danger{% elif p.stock_row.status == 'low' %}text-warning-emphasis{% endif %}">{{ p.stock_row.on_hand|qty }}</b>{% elif p.track_stock %}0{% else %}<span class="text-muted">&ndash;</span>{% endif %}</td>{% endif %}<td class="num">{{ p.price|money }}</td>
+    <td class="text-end text-nowrap"><span class="d-none d-md-inline"><a class="btn btn-sm btn-outline-secondary" href="{% url 'product_edit' p.pk %}"><i class="bi bi-pencil"></i></a>
+      <a class="btn btn-sm btn-outline-danger" href="{% url 'product_delete' p.pk %}"><i class="bi bi-trash"></i></a></span>
+      {% url 'product_edit' p.pk as eu %}{% url 'product_delete' p.pk as du %}{% include "erp/_row_menu.html" with edit_url=eu delete_url=du %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No products yet.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "erp/_pagination.html" %}
+{% endblock %}

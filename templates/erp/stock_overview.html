@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="h4 mb-0">Stock</h1><div class="range-note">{% if wh %}{{ wh.name }}{% elif many %}All warehouses{% else %}What you have in hand{% endif %}</div></div>
+  <div class="head-actions"><a class="btn btn-primary btn-sm" href="{% url 'stock_adjust' %}"><i class="bi bi-plus-slash-minus"></i> Adjust stock</a></div>
+</div>
+
+<div class="row g-2 mb-3">
+  <div class="col-6 col-lg-3"><a class="card stat h-100 text-decoration-none" href="{% url 'stock_overview' %}"><div class="card-body"><div class="text-muted small">Items</div><div class="value">{{ stats.items }}</div></div></a></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Stock value</div><div class="value">{{ currency }} {{ stats.value|money_short }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><a class="card stat h-100 text-decoration-none {% if stats.low %}border-warning{% endif %}" href="?status=low"><div class="card-body"><div class="text-muted small">Low stock</div><div class="value {% if stats.low %}text-warning-emphasis{% endif %}">{{ stats.low }}</div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="card stat h-100 text-decoration-none {% if stats.out %}border-danger{% endif %}" href="?status=out"><div class="card-body"><div class="text-muted small">Out of stock</div><div class="value {% if stats.out %}text-danger{% endif %}">{{ stats.out }}</div></div></a></div>
+</div>
+
+<div class="action-row compact mb-3">
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'stock_moves' %}"><i class="bi bi-arrow-left-right"></i> History</a>
+  {% if many %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'stock_transfer' %}"><i class="bi bi-truck"></i> Transfer</a>{% endif %}
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'warehouse_list' %}"><i class="bi bi-building"></i> Warehouses</a>
+  {% if 'reports' in features %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'report_view' 'stock-summary' %}"><i class="bi bi-file-earmark-pdf"></i> Report</a>{% endif %}
+</div>
+
+<form method="get" id="sflt" class="mb-3">
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <div class="search-box flex-grow-1" style="min-width:200px"><i class="bi bi-search"></i><input name="q" class="form-control" placeholder="Search item or code…" value="{{ request.GET.q }}"></div>
+    {% if many %}<select name="warehouse" class="form-select" style="width:auto"><option value="">All warehouses</option>{% for w in warehouses %}<option value="{{ w.pk }}" {% if wh and wh.pk == w.pk %}selected{% endif %}>{{ w.name }}</option>{% endfor %}</select>{% endif %}
+    <div class="seg">
+      <input type="radio" class="btn-check" name="status" id="s-all" value="" {% if not status %}checked{% endif %}><label for="s-all">All</label>
+      <input type="radio" class="btn-check" name="status" id="s-low" value="low" {% if status == 'low' %}checked{% endif %}><label for="s-low">Low</label>
+      <input type="radio" class="btn-check" name="status" id="s-out" value="out" {% if status == 'out' %}checked{% endif %}><label for="s-out">Out</label>
+    </div>
+  </div>
+</form>
+<script>document.getElementById('sflt').addEventListener('change', function () { this.submit(); });</script>
+
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>Item</th><th class="num">In stock</th><th class="num d-none d-md-table-cell">Low at</th><th class="num d-none d-md-table-cell">Avg cost</th><th class="num d-none d-md-table-cell">Value</th><th class="d-none d-md-table-cell">Status</th></tr></thead>
+  <tbody>{% for p in page %}<tr onclick="location='{% url 'stock_product' p.pk %}'" style="cursor:pointer">
+    <td><a href="{% url 'stock_product' p.pk %}">{{ p.name }}</a>{% if p.sku %}<div class="small text-muted">{{ p.sku }}</div>{% endif %}</td>
+    <td class="num"><b class="{% if p.status == 'out' %}text-danger{% elif p.status == 'low' %}text-warning-emphasis{% endif %}">{{ p.on_hand|qty }}</b> <small class="text-muted">{{ p.unit.symbol }}</small>
+      <div class="d-md-none">{% if p.status == 'out' %}<span class="badge text-bg-danger">Out</span>{% elif p.status == 'low' %}<span class="badge text-bg-warning">Low</span>{% endif %}</div></td>
+    <td class="num d-none d-md-table-cell">{% if p.reorder_level %}{{ p.reorder_level|qty }}{% else %}&ndash;{% endif %}</td>
+    <td class="num d-none d-md-table-cell">{% if p.avg_cost is not None %}{{ p.avg_cost|money }}{% else %}&ndash;{% endif %}</td>
+    <td class="num d-none d-md-table-cell">{{ p.value|money }}</td>
+    <td class="d-none d-md-table-cell">{% if p.status == 'out' %}<span class="badge text-bg-danger">{% if p.on_hand < 0 %}Below zero{% else %}Out of stock{% endif %}</span>{% elif p.status == 'low' %}<span class="badge text-bg-warning">Low</span>{% else %}<span class="badge text-bg-success">OK</span>{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">
+    {% if not has_products %}No items to count yet. <a href="{% url 'product_new' %}">Add a product</a> and enter how much you have.{% else %}Nothing matches.{% endif %}</td></tr>{% endfor %}</tbody>
+  {% if page.paginator.count %}<tfoot class="table-light d-none d-md-table-footer-group"><tr><th colspan="4">Total stock value (all matching)</th><th class="num">{{ stats.value|money }}</th><th></th></tr></tfoot>{% endif %}
+</table></div></div>
+{% include "erp/_pagination.html" %}
+{% endblock %}

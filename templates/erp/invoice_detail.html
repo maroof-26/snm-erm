@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap">
+  <div><h1 class="h4 mb-0">{{ invoice.code }} <span class="badge text-bg-{% if invoice.status == 'Paid' %}success{% elif invoice.status == 'Partial' %}warning{% else %}secondary{% endif %} fs-6">{{ invoice.status }}</span></h1>
+    <div class="text-muted">{{ invoice.party.name }} &middot; {{ invoice.date|date:"d M Y" }}{% if invoice.due_date %} &middot; due {{ invoice.due_date|date:"d M Y" }}{% endif %}</div></div>
+</div>
+<div class="action-row mb-3">
+  {% if kind == 'sale' and invoice.party.phone %}{% wa_url invoice.party.phone wa_text as wa %}<a class="btn btn-sm btn-success" href="{{ wa }}" target="_blank"><i class="bi bi-whatsapp"></i> <span class="d-md-none">Send</span><span class="d-none d-md-inline">WhatsApp</span></a>{% endif %}
+  <a class="btn btn-sm btn-outline-primary" href="{% url kind|add:'_pdf' invoice.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf"></i> <span class="d-none d-md-inline">Print / </span>PDF</a>
+  {% if 'payments' in features and invoice.balance > 0 %}<a class="btn btn-sm btn-success" href="{% url 'payment_new' %}?invoice={{ invoice.pk }}"><i class="bi bi-cash"></i> {% if kind == 'sale' %}Receive<span class="d-none d-md-inline"> money</span>{% else %}Pay{% endif %}</a>{% endif %}
+  <a class="btn btn-sm btn-outline-secondary" href="{% url kind|add:'_edit' invoice.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+  <a class="btn btn-sm btn-outline-danger btn-icon" href="{% url kind|add:'_delete' invoice.pk %}" aria-label="Delete"><i class="bi bi-trash"></i></a>
+</div>
+<div class="card mb-3"><div class="table-responsive"><table class="table mb-0 align-middle">
+  <thead><tr><th>Item</th><th class="num d-none d-md-table-cell">Qty</th><th class="d-none d-md-table-cell">Unit</th><th class="num d-none d-md-table-cell">Rate</th><th class="num">Amount</th></tr></thead>
+  <tbody>{% for it in items %}<tr><td>{{ it.product.name }}<div class="d-md-none small text-muted">{{ it.quantity|qty }} {{ it.unit.symbol }} &times; {{ it.rate|money_short }}</div></td><td class="num d-none d-md-table-cell">{{ it.quantity|qty }}</td><td class="d-none d-md-table-cell">{{ it.unit.symbol }}</td><td class="num d-none d-md-table-cell">{{ it.rate|money }}</td><td class="num">{{ it.amount|money }}</td></tr>{% endfor %}</tbody>
+  <tfoot class="table-light">
+    <tr><th class="text-end d-md-none">Total</th><th colspan="4" class="text-end d-none d-md-table-cell">Total</th><th class="num">{{ currency }} {{ invoice.total|money }}</th></tr>
+    <tr><td class="text-end d-md-none">Paid</td><td colspan="4" class="text-end d-none d-md-table-cell">Paid</td><td class="num">{{ invoice.paid|money }}</td></tr>
+    <tr><th class="text-end d-md-none">Balance</th><th colspan="4" class="text-end d-none d-md-table-cell">Balance</th><th class="num">{{ currency }} {{ invoice.balance|money }}</th></tr>
+  </tfoot>
+</table></div></div>
+{% if invoice.notes %}<p class="text-muted">{{ invoice.notes }}</p>{% endif %}
+{% if payments %}<h2 class="h6">Payments</h2><ul class="list-group">{% for p in payments %}<li class="list-group-item d-flex justify-content-between"><span>{{ p.date|date:"d M Y" }} &middot; {{ p.get_method_display }} {{ p.reference }}</span><span class="num">{{ p.amount|money }}</span></li>{% endfor %}</ul>{% endif %}
+<div class="mt-4 d-flex gap-2 flex-wrap"><a class="btn btn-primary" href="{% url kind|add:'_new' %}"><i class="bi bi-plus-lg"></i> New {{ kind }}</a><a class="btn btn-outline-secondary" href="{% url kind|add:'_list' %}">All {{ kind }}s</a></div>
+{% endblock %}
