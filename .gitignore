@@ -4,3 +4,7 @@ __pycache__/
 db.sqlite3
 .env
 config/environment.py
+*/migrations/*
+!*/migrations/__init__.py
+mockups/
+pitch_video/
