@@ -128,3 +128,6 @@ MAILERS = {
 
 # Used to turn local phone numbers (03xx...) into WhatsApp links
 DEFAULT_COUNTRY_CODE = '92'
+
+# Same primary-key type on every Django version (6.x already defaults to this)
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
