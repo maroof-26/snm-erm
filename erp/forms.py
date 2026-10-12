@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.forms import inlineformset_factory
 
 from . import stock
-from .models import Invoice, InvoiceItem, LedgerEntry, Party, Payment, Product, StockMove, Warehouse
+from .models import Invoice, InvoiceItem, LedgerEntry, Order, OrderItem, Party, Payment, Product, StockMove, Warehouse
 
 DATE = forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d')
 
@@ -65,10 +65,10 @@ class ProductForm(TenantForm):
 
     class Meta:
         model = Product
-        fields = ['name', 'sku', 'unit', 'price', 'track_stock', 'reorder_level', 'is_active']
+        fields = ['name', 'sku', 'barcode', 'unit', 'price', 'track_stock', 'reorder_level', 'is_active']
         labels = {'track_stock': 'Count stock of this item', 'reorder_level': 'Low-stock alert at'}
 
-    field_order = ['name', 'sku', 'unit', 'price', 'track_stock', 'opening_qty', 'opening_cost', 'reorder_level', 'is_active']
+    field_order = ['name', 'sku', 'barcode', 'unit', 'price', 'track_stock', 'opening_qty', 'opening_cost', 'reorder_level', 'is_active']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -76,6 +76,8 @@ class ProductForm(TenantForm):
         self.fields['unit'].queryset = self.tenant.available_units()
         if self._creating and self.tenant.default_unit_id:
             self.fields['unit'].initial = self.tenant.default_unit_id
+        if 'pos' not in self.tenant.enabled_features():
+            del self.fields['barcode']
         if 'stock' not in self.tenant.enabled_features():
             for f in ('track_stock', 'reorder_level', 'opening_qty', 'opening_cost'):
                 del self.fields[f]
@@ -83,6 +85,12 @@ class ProductForm(TenantForm):
             self.fields['reorder_level'].required = False
             if not self._creating:
                 del self.fields['opening_qty'], self.fields['opening_cost']
+
+    def clean_barcode(self):
+        code = (self.cleaned_data.get('barcode') or '').strip()
+        if code and Product.objects.filter(tenant=self.tenant, barcode=code).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('Another item already uses this barcode.')
+        return code
 
     def clean_reorder_level(self):
         return self.cleaned_data.get('reorder_level') or Decimal('0')
@@ -103,7 +111,7 @@ class InvoiceForm(TenantForm):
 
     class Meta:
         model = Invoice
-        fields = ['party', 'date', 'warehouse', 'due_date', 'notes']
+        fields = ['party', 'date', 'warehouse', 'discount', 'due_date', 'notes']
         widgets = {'date': DATE, 'due_date': DATE, 'notes': forms.Textarea(attrs={'rows': 2})}
 
     def __init__(self, *args, **kwargs):
@@ -122,18 +130,26 @@ class InvoiceForm(TenantForm):
         self.scoped('party', Party, is_active=True, kind__in=kinds)
         self.fields['party'].label = 'Customer' if self.instance.kind == Invoice.SALE else 'Vendor'
         self.fields['party'].empty_label = 'Select customer' if self.instance.kind == Invoice.SALE else 'Select vendor'
+        self.fields['discount'].required = False
         if self.instance.pk:
             del self.fields['paid_now'], self.fields['method']
+
+
+    def clean_discount(self):
+        return self.cleaned_data.get('discount') or Decimal('0')
 
 
 class InvoiceItemForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = InvoiceItem
-        fields = ['product', 'quantity', 'unit', 'rate']
+        fields = ['product', 'quantity', 'unit', 'rate', 'order_item']
+        widgets = {'order_item': forms.HiddenInput}
 
     def __init__(self, *args, tenant, **kwargs):
         super().__init__(*args, **kwargs)
         self.tenant = tenant
+        self.fields['order_item'].queryset = OrderItem.objects.filter(order__tenant=tenant)
+        self.fields['order_item'].required = False
         self.fields['product'].queryset = Product.objects.filter(tenant=tenant, is_active=True)
         self.fields['unit'].queryset = tenant.available_units()
         self.fields['product'].empty_label = 'Select item'
@@ -149,6 +165,13 @@ class InvoiceItemForm(BootstrapMixin, forms.ModelForm):
         if product and unit and product.track_stock and unit != product.unit and 'stock' in self.tenant.enabled_features():
             self.add_error('unit', f'Stock of this item is counted in {product.unit.symbol}.')
         return data
+
+
+class PrefilledItemForm(InvoiceItemForm):
+    """Rows pre-filled from an order must always be saved, even if the user left them exactly as suggested."""
+
+    def has_changed(self):
+        return True
 
 
 ItemFormSet = inlineformset_factory(Invoice, InvoiceItem, form=InvoiceItemForm, extra=0, min_num=1, validate_min=True, can_delete=True)
@@ -334,3 +357,41 @@ class WarehouseForm(TenantForm):
         if commit and wh.is_default:
             Warehouse.objects.filter(tenant=self.tenant).exclude(pk=wh.pk).update(is_default=False)
         return wh
+
+
+class OrderForm(TenantForm):
+    class Meta:
+        model = Order
+        fields = ['party', 'date', 'due_date', 'notes', 'terms']
+        widgets = {'date': DATE, 'due_date': DATE, 'notes': forms.Textarea(attrs={'rows': 2}), 'terms': forms.Textarea(attrs={'rows': 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        buying = self.instance.kind == Order.PURCHASE_ORDER
+        self.scoped('party', Party, is_active=True, kind__in=[Party.VENDOR if buying else Party.CUSTOMER, Party.BOTH])
+        self.fields['party'].label = 'Vendor' if buying else 'Customer'
+        self.fields['party'].empty_label = 'Select vendor' if buying else 'Select customer'
+        self.fields['due_date'].label = self.instance.due_label
+        self.fields['terms'].label = 'Terms & conditions'
+        if not self.instance.pk and not self.initial.get('terms') and not self.is_bound:
+            self.fields['terms'].initial = self.tenant.default_terms
+
+
+class OrderItemForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = OrderItem
+        fields = ['product', 'quantity', 'unit', 'rate']
+
+    def __init__(self, *args, tenant, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['product'].queryset = Product.objects.filter(tenant=tenant, is_active=True)
+        self.fields['unit'].queryset = tenant.available_units()
+        self.fields['product'].empty_label = 'Select item'
+        self.fields['unit'].empty_label = 'Unit'
+        self.fields['unit'].label_from_instance = lambda u: u.symbol
+        if tenant.default_unit_id and not self.instance.pk:
+            self.fields['unit'].initial = tenant.default_unit_id
+        self.style_fields()
+
+
+OrderItemFormSet = inlineformset_factory(Order, OrderItem, form=OrderItemForm, extra=0, min_num=1, validate_min=True, can_delete=True)

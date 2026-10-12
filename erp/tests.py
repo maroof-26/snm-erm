@@ -38,7 +38,7 @@ class ErpTests(TestCase):
 
     def test_seeded_units_and_features(self):
         self.assertTrue(Unit.objects.filter(symbol='L').exists())
-        self.assertEqual(Feature.objects.count(), 9)
+        self.assertEqual(Feature.objects.count(), 13)
 
     def test_sale_updates_ledger_and_paid(self):
         r = self.post_invoice('sale', self.cust, qty='50', rate='10', paid='200')
@@ -132,7 +132,7 @@ class ErpTests(TestCase):
         self.client.login(username='root', password='pw')
         r = self.client.post('/admin/tenants/tenant/add/', {
             'name': 'Newco', 'slug': 'newco', 'is_active': 'on', 'features': [f.pk for f in Feature.objects.all()],
-            'currency_symbol': 'Rs', 'sale_prefix': 'INV', 'purchase_prefix': 'BILL',
+            'currency_symbol': 'Rs', 'sale_prefix': 'INV', 'purchase_prefix': 'BILL', 'quote_prefix': 'QUO', 'so_prefix': 'SO', 'po_prefix': 'PO', 'allow_negative_stock': 'on',
             'owner_username': 'newowner', 'owner_password': 'secret123',
             'memberships-TOTAL_FORMS': 0, 'memberships-INITIAL_FORMS': 0, 'memberships-MIN_NUM_FORMS': 0, 'memberships-MAX_NUM_FORMS': 1000})
         self.assertEqual(r.status_code, 302, r.content[:2000] if r.status_code == 200 else '')

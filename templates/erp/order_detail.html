@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap">
+  <div><h1 class="h4 mb-0">{{ order.code }} <span class="badge text-bg-{{ order.display_status|status_color }} fs-6">{{ order.display_status }}</span></h1>
+    <div class="text-muted">{{ order.party.name }} &middot; {{ order.date|date:"d M Y" }}{% if order.due_date %} &middot; {{ order.due_label|lower }} {{ order.due_date|date:"d M Y" }}{% endif %}</div></div>
+</div>
+<div class="action-row wrap mb-3">
+  {% if can_invoice %}<a class="btn btn-sm btn-primary" href="{% url invoice_url %}?from_order={{ order.pk }}"><i class="bi bi-receipt"></i> {% if kind == 'purchase_order' %}Receive / bill{% else %}Create invoice{% endif %}</a>{% endif %}
+  {% if can_make_order %}<form method="post" action="{% url 'quotation_convert' order.pk %}" class="d-contents">{% csrf_token %}<button class="btn btn-sm btn-outline-primary"><i class="bi bi-bag-check"></i> Make sales order</button></form>{% endif %}
+  {% if order.party.phone %}{% wa_url order.party.phone wa_text as wa %}<a class="btn btn-sm btn-success" href="{{ wa }}" target="_blank"><i class="bi bi-whatsapp"></i> <span class="d-md-none">Send</span><span class="d-none d-md-inline">WhatsApp</span></a>{% endif %}
+  <a class="btn btn-sm btn-outline-primary" href="{% url kind|add:'_pdf' order.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+  {% if order.status != 'converted' %}<a class="btn btn-sm btn-outline-secondary" href="{% url kind|add:'_edit' order.pk %}"><i class="bi bi-pencil"></i> Edit</a>{% endif %}
+  {% if kind == 'quotation' and order.status != 'converted' %}
+  <div class="dropdown"><button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}'>Mark as</button>
+    <ul class="dropdown-menu">{% for v, label in quote_statuses %}<li><form method="post" action="{% url 'quotation_status' order.pk %}">{% csrf_token %}<input type="hidden" name="status" value="{{ v }}"><button class="dropdown-item">{{ label }}</button></form></li>{% endfor %}</ul></div>
+  {% elif kind != 'quotation' %}
+  <form method="post" action="{% url kind|add:'_status' order.pk %}" class="d-contents">{% csrf_token %}
+    {% if order.status == 'cancelled' %}<input type="hidden" name="status" value="open"><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i> Re-open</button>
+    {% else %}<input type="hidden" name="status" value="cancelled"><button class="btn btn-sm btn-outline-secondary" onclick="return confirm('Cancel this order?')"><i class="bi bi-x-circle"></i> Cancel</button>{% endif %}</form>
+  {% endif %}
+  <a class="btn btn-sm btn-outline-danger btn-icon" href="{% url kind|add:'_delete' order.pk %}" aria-label="Delete"><i class="bi bi-trash"></i></a>
+</div>
+
+{% if order.source or children or invoices %}
+<div class="d-flex gap-2 flex-wrap mb-3 small">
+  {% if order.source %}<span class="chipx">From <a href="{% url order.source.kind|add:'_detail' order.source.pk %}">{{ order.source.code }}</a></span>{% endif %}
+  {% for c in children %}<span class="chipx">&rarr; <a href="{% url c.kind|add:'_detail' c.pk %}">{{ c.code }}</a></span>{% endfor %}
+  {% for i in invoices %}<span class="chipx">{% if i.kind == 'sale' %}Invoice{% else %}Bill{% endif %} <a href="{% url i.kind|add:'_detail' i.pk %}">{{ i.code }}</a></span>{% endfor %}
+</div>
+{% endif %}
+
+<div class="card mb-3"><div class="table-responsive"><table class="table mb-0 align-middle">
+  <thead><tr><th>Item</th><th class="num d-none d-md-table-cell">Qty</th><th class="d-none d-md-table-cell">Unit</th><th class="num d-none d-md-table-cell">Rate</th>
+    {% if kind != 'quotation' %}<th class="num d-none d-md-table-cell">Invoiced</th><th class="num d-none d-md-table-cell">Remaining</th>{% endif %}
+    {% if track %}<th class="num d-none d-md-table-cell">In stock</th>{% endif %}<th class="num">Amount</th></tr></thead>
+  <tbody>{% for it in items %}<tr>
+    <td>{{ it.product.name }}<div class="d-md-none small text-muted">{{ it.quantity|qty }} {{ it.unit.symbol }} &times; {{ it.rate|money_short }}{% if kind != 'quotation' %} &middot; left {{ it.remaining|qty }}{% endif %}{% if it.short %} <span class="text-danger">&middot; low stock</span>{% endif %}</div></td>
+    <td class="num d-none d-md-table-cell">{{ it.quantity|qty }}</td><td class="d-none d-md-table-cell">{{ it.unit.symbol }}</td><td class="num d-none d-md-table-cell">{{ it.rate|money }}</td>
+    {% if kind != 'quotation' %}<td class="num d-none d-md-table-cell">{{ it.invoiced_qty|qty }}</td><td class="num d-none d-md-table-cell">{{ it.remaining|qty }}</td>{% endif %}
+    {% if track %}<td class="num d-none d-md-table-cell">{% if it.available is not None %}<span class="{% if it.short %}text-danger fw-semibold{% endif %}">{{ it.available|qty }}</span>{% else %}&ndash;{% endif %}</td>{% endif %}
+    <td class="num">{{ it.amount|money }}</td></tr>{% endfor %}</tbody>
+  <tfoot class="table-light"><tr><th class="text-end d-md-none">Total</th><th colspan="{% if kind == 'quotation' %}4{% elif track %}7{% else %}6{% endif %}" class="text-end d-none d-md-table-cell">Total</th><th class="num">{{ currency }} {{ order.total|money }}</th></tr></tfoot>
+</table></div></div>
+{% if track %}{% for it in items %}{% if it.short %}<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill"></i> Not enough stock of <b>{{ it.product.name }}</b>: have {{ it.available|qty }}, still to deliver {{ it.remaining|qty }}.</div>{% endif %}{% endfor %}{% endif %}
+{% if order.notes %}<p class="text-muted">{{ order.notes }}</p>{% endif %}
+{% if order.terms %}<div class="card card-body small"><b>Terms &amp; conditions</b><div class="text-muted" style="white-space:pre-line">{{ order.terms }}</div></div>{% endif %}
+<div class="mt-4 d-flex gap-2 flex-wrap"><a class="btn btn-primary" href="{% url kind|add:'_new' %}"><i class="bi bi-plus-lg"></i> New {{ order.get_kind_display|lower }}</a><a class="btn btn-outline-secondary" href="{% url kind|add:'_list' %}">All</a></div>
+{% endblock %}

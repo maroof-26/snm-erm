@@ -1,8 +1,8 @@
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from . import services, stock
-from .models import Invoice, InvoiceItem, Party, Payment
+from . import orders, services, stock
+from .models import Invoice, InvoiceItem, OrderItem, Party, Payment
 
 
 @receiver(post_save, sender=Invoice)
@@ -32,3 +32,20 @@ def payment_saved(sender, instance, **kwargs):
 @receiver(post_save, sender=Party)
 def party_saved(sender, instance, **kwargs):
     services.sync_opening(instance)
+
+
+def _sync_order_of(item):
+    if item.order_item_id:
+        oi = OrderItem.objects.filter(pk=item.order_item_id).select_related('order__tenant').first()
+        if oi:
+            orders.sync_progress(oi.order)
+
+
+@receiver(post_save, sender=InvoiceItem)
+def item_progress_saved(sender, instance, **kwargs):
+    _sync_order_of(instance)
+
+
+@receiver(post_delete, sender=InvoiceItem)
+def item_progress_deleted(sender, instance, **kwargs):
+    _sync_order_of(instance)

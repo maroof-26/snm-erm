@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><a href="{% url 'pos_shift' %}" class="small d-print-none">&larr; Shifts</a><h1 class="h4 mb-0">Shift report</h1>
+    <div class="range-note">{{ s.opened_at|date:"d M Y, H:i" }}{% if s.closed_at %} &ndash; {{ s.closed_at|date:"H:i" }}{% else %} &middot; still open{% endif %} &middot; {{ s.user.get_username }}</div></div>
+  <div class="head-actions d-print-none"><button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button></div>
+</div>
+<div class="row g-2 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Sales</div><div class="value">{{ sum.count }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Total sold</div><div class="value">{{ currency }} {{ sum.total|money_short }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Discounts</div><div class="value">{{ currency }} {{ sum.discount|money_short }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Received</div><div class="value">{{ currency }} {{ sum.received|money_short }}</div></div></div></div>
+</div>
+<div class="card mb-3"><div class="card-body"><h2 class="h6">Cash drawer</h2>
+  <dl class="lm-grid">
+    <div><dt>Opening cash</dt><dd>{{ s.opening_cash|money }}</dd></div>
+    <div><dt>Cash sales</dt><dd>{{ sum.expected_cash|money }} <small class="text-muted">(incl. opening)</small></dd></div>
+    <div><dt>Counted at closing</dt><dd>{% if s.closing_cash is not None %}{{ s.closing_cash|money }}{% else %}&ndash;{% endif %}</dd></div>
+    <div><dt>Difference</dt><dd class="{% if sum.difference is not None and sum.difference < 0 %}text-danger{% elif sum.difference %}text-warning-emphasis{% else %}text-success{% endif %}">{% if sum.difference is not None %}{{ sum.difference|money }}{% else %}&ndash;{% endif %}</dd></div>
+  </dl>
+  {% if sum.by_method %}<div class="d-flex gap-2 flex-wrap mt-3">{% for label, amount in sum.by_method %}<span class="chipx">{{ label }}: <b>{{ amount|money }}</b></span>{% endfor %}</div>{% endif %}
+  {% if s.note %}<div class="small text-muted mt-2">Note: {{ s.note }}</div>{% endif %}
+</div></div>
+<div class="card"><div class="table-responsive"><table class="table mb-0 align-middle">
+  <thead><tr><th>No.</th><th>Customer</th><th class="num">Total</th></tr></thead>
+  <tbody>{% for i in sales %}<tr><td><a href="{% url 'sale_detail' i.pk %}">{{ i.code }}</a></td><td>{{ i.party.name }}</td><td class="num">{{ i.total|money }}</td></tr>
+  {% empty %}<tr><td colspan="3" class="text-center text-muted py-4">No sales in this shift.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

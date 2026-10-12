@@ -31,3 +31,12 @@ def wa_url(phone, text):
     """WhatsApp click-to-chat link; opens the chat with `text` prefilled. Empty if no phone."""
     number = wa_number(phone)
     return f'https://wa.me/{number}?text={quote(text)}' if number else ''
+
+
+STATUS_COLORS = {'draft': 'secondary', 'sent': 'info', 'accepted': 'success', 'rejected': 'danger', 'converted': 'primary', 'expired': 'dark',
+                 'open': 'secondary', 'partial': 'warning', 'completed': 'success', 'cancelled': 'danger'}
+
+
+@register.filter
+def status_color(status):
+    return STATUS_COLORS.get(str(status).lower(), 'secondary')

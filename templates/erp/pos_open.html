@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="mx-auto" style="max-width:460px">
+  <div class="card card-body mt-4">
+    <div class="text-center mb-3"><i class="bi bi-cart4 fs-1 text-primary"></i><h1 class="h4 mt-2 mb-1">Open your shift</h1><div class="text-muted small">Count the cash in the drawer, enter it, and start selling.</div></div>
+    <form method="post">{% csrf_token %}
+      <label class="form-label" for="oc">Cash in the drawer now</label>
+      <div class="input-group mb-3"><span class="input-group-text">{{ currency }}</span><input id="oc" name="opening_cash" data-comma="1" data-decimals="2" class="form-control form-control-lg" inputmode="decimal" value="{% if last and last.closing_cash %}{{ last.closing_cash|money }}{% else %}0{% endif %}" autofocus></div>
+      {% if last %}<div class="small text-muted mb-3">Last shift closed with {{ currency }} {{ last.closing_cash|default_if_none:0|money }} ({{ last.closed_at|date:"d M, H:i" }}).</div>{% endif %}
+      <button class="btn btn-primary btn-lg w-100">Start selling <i class="bi bi-arrow-right"></i></button>
+    </form>
+  </div>
+</div>
+{% endblock %}

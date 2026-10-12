@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">{{ title }}{% if order.pk %} {{ order.code }}{% endif %}</h1>
+<form method="post" id="inv">{% csrf_token %}
+  {{ form.non_field_errors }}
+  <div class="card card-body mb-3"><div class="row g-3">
+    <div class="col-12 col-md-6">
+      <label class="form-label" for="{{ form.party.id_for_label }}">{{ form.party.label }}</label>
+      {{ form.party }}{% for e in form.party.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      {% if 'parties' in features %}<a class="small" href="{% url 'party_new' %}?kind={% if kind == 'purchase_order' %}vendor{% else %}customer{% endif %}&next={{ request.get_full_path|urlencode }}"><i class="bi bi-plus-circle"></i> New {% if kind == 'purchase_order' %}vendor{% else %}customer{% endif %} not in list?</a>{% endif %}
+    </div>
+    <div class="col-6 col-md-3"><label class="form-label" for="{{ form.date.id_for_label }}">Date</label>{{ form.date }}{% for e in form.date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+    <div class="col-6 col-md-3"><label class="form-label" for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>{{ form.due_date }}{% for e in form.due_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+  </div></div>
+  <h2 class="h6">Items</h2>
+  {{ formset.management_form }}{{ formset.non_form_errors }}
+  <div id="rows" class="d-grid gap-2 mb-2">
+    {% for f in formset %}{% include "erp/_item_row.html" with f=f %}{% endfor %}
+  </div>
+  <template id="empty">{% include "erp/_item_row.html" with f=formset.empty_form %}</template>
+  <button type="button" class="btn btn-outline-primary mb-3" id="add"><i class="bi bi-plus-lg"></i> Add another item</button>
+  <div class="card card-body mb-3">
+    <div class="d-flex justify-content-between align-items-center"><span class="fs-5">Total</span><span class="fs-4 fw-bold">{{ currency }} <span id="total">0.00</span></span></div>
+    <hr class="my-3">
+    <div class="row g-3">
+      <div class="col-12 col-md-6"><label class="form-label" for="{{ form.terms.id_for_label }}">{{ form.terms.label }}</label>{{ form.terms }}</div>
+      <div class="col-12 col-md-6"><label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>{{ form.notes }}</div>
+    </div>
+  </div>
+  <div class="d-flex gap-2"><button class="btn btn-primary btn-lg flex-grow-1 flex-md-grow-0 px-md-5">Save {{ order.get_kind_display|lower }}</button>
+    <a class="btn btn-outline-secondary btn-lg" href="{% if order.pk %}{% url kind|add:'_detail' order.pk %}{% else %}{% url kind|add:'_list' %}{% endif %}">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}{% include "erp/_items_formset_js.html" %}{% endblock %}

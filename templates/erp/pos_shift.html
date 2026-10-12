@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="h4 mb-0">POS shifts</h1><div class="range-note">Cash drawer and sales per shift</div></div>
+  <div class="head-actions">{% if current %}<a class="btn btn-primary btn-sm" href="{% url 'pos_home' %}"><i class="bi bi-cart4"></i> Back to POS</a>{% else %}<a class="btn btn-primary btn-sm" href="{% url 'pos_open' %}"><i class="bi bi-play-fill"></i> Open shift</a>{% endif %}</div>
+</div>
+
+{% if current %}
+<div class="card mb-3"><div class="card-body">
+  <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 mb-0">Current shift</h2><span class="badge text-bg-success">Open since {{ current.opened_at|date:"d M, H:i" }}</span></div>
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Sales</div><div class="value">{{ cur_sum.count }}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Total sold</div><div class="value">{{ currency }} {{ cur_sum.total|money_short }}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Discounts given</div><div class="value">{{ currency }} {{ cur_sum.discount|money_short }}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card stat h-100"><div class="card-body"><div class="text-muted small">Cash should be</div><div class="value">{{ currency }} {{ cur_sum.expected_cash|money_short }}</div></div></div></div>
+  </div>
+  {% if cur_sum.by_method %}<div class="d-flex gap-2 flex-wrap mb-3">{% for label, amount in cur_sum.by_method %}<span class="chipx">{{ label }}: <b>{{ amount|money }}</b></span>{% endfor %}</div>{% endif %}
+  <form method="post" class="row g-2 align-items-end">{% csrf_token %}
+    <div class="col-12 col-md-4"><label class="form-label" for="cc">Cash counted now</label><input id="cc" name="closing_cash" data-comma="1" data-decimals="2" class="form-control" inputmode="decimal" required></div>
+    <div class="col-12 col-md-5"><label class="form-label" for="nt">Note (optional)</label><input id="nt" name="note" class="form-control" maxlength="200"></div>
+    <div class="col-12 col-md-3"><button class="btn btn-outline-danger w-100" onclick="return confirm('Close this shift? You will need to open a new one to keep selling.')"><i class="bi bi-lock"></i> Close shift</button></div>
+    <div class="col-12 small" id="diff"></div>
+  </form>
+</div></div>
+<script>
+const expected = {{ cur_sum.expected_cash|stringformat:"f" }};
+document.getElementById('cc').addEventListener('input', function () {
+  const v = parseFloat(this.value.replace(/,/g, '')); const d = document.getElementById('diff');
+  if (isNaN(v)) { d.textContent = ''; return; }
+  const diff = Math.round((v - expected) * 100) / 100;
+  d.className = 'col-12 small ' + (diff === 0 ? 'text-success' : 'text-danger');
+  d.textContent = diff === 0 ? 'Cash matches.' : (diff > 0 ? 'Over by ' : 'Short by ') + Math.abs(diff).toLocaleString('en-US', {minimumFractionDigits: 2});
+});
+</script>
+{% endif %}
+
+<h2 class="h6">Recent shifts</h2>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>Opened</th><th class="d-none d-md-table-cell">Cashier</th><th class="num">Sales</th><th class="num">Total</th><th class="num d-none d-md-table-cell">Difference</th><th></th></tr></thead>
+  <tbody>{% for s in recent %}<tr onclick="location='{% url 'pos_shift_detail' s.pk %}'" style="cursor:pointer">
+    <td class="text-nowrap">{{ s.opened_at|date:"d M, H:i" }}{% if s.is_open %} <span class="badge text-bg-success">open</span>{% endif %}</td>
+    <td class="d-none d-md-table-cell">{{ s.user.get_username|default:"" }}</td><td class="num">{{ s.sum.count }}</td><td class="num">{{ s.sum.total|money }}</td>
+    <td class="num d-none d-md-table-cell">{% if s.sum.difference is not None %}<span class="{% if s.sum.difference < 0 %}text-danger{% elif s.sum.difference > 0 %}text-warning-emphasis{% else %}text-success{% endif %}">{{ s.sum.difference|money }}</span>{% else %}&ndash;{% endif %}</td>
+    <td class="text-end"><i class="bi bi-chevron-right text-muted"></i></td></tr>
+  {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No shifts yet.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

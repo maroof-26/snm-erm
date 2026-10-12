@@ -8,7 +8,7 @@ def d(x):
     return x.strftime('%d %b %Y')
 
 from . import stock
-from .models import Invoice, Payment, StockMove
+from .models import Invoice, Order, Payment, StockMove
 from .queries import item_summary, party_balances, party_statement, with_paid
 
 
@@ -114,6 +114,28 @@ def _stock_moves(tenant, rng, party=None):
                   landscape=True, weights=[1.4, 3, 1.8, 1, 1, 1.6, 2])
 
 
+def _order_register(kind, title):
+    def build(tenant, rng, party=None):
+        qs = rng.apply(Order.objects.filter(tenant=tenant, kind=kind)).select_related('party', 'tenant').prefetch_related('items').order_by('date', 'number')
+        rows = [[d(o.date), o.code, o.party.name, d(o.due_date) if o.due_date else '', money(o.total), o.display_status] for o in qs]
+        who = 'Vendor' if kind == Order.PURCHASE_ORDER else 'Customer'
+        label = {Order.QUOTATION: 'Valid until', Order.SALES_ORDER: 'Delivery', Order.PURCHASE_ORDER: 'Expected'}[kind]
+        return Report(title, rng.label, ['Date', 'No.', who, label, 'Total', 'Status'], 'lllrrl'.replace('r', 'l', 1), rows,
+                      ['Total', '', '', '', money(sum(o.total for o in qs)), ''], weights=[1.5, 1.3, 3, 1.5, 1.4, 1.4])
+    return build
+
+
+def _pending_items(kind, title):
+    def build(tenant, rng, party=None):
+        qs = rng.apply(Order.objects.filter(tenant=tenant, kind=kind).exclude(status=Order.CANCELLED)).select_related('party', 'tenant').prefetch_related('items__product', 'items__unit').order_by('date', 'number')
+        rows = [[o.code, o.party.name, it.product.name, qty(it.quantity), qty(it.invoiced_qty), qty(it.remaining), it.unit.symbol]
+                for o in qs for it in o.items.all() if it.remaining > 0]
+        who = 'Vendor' if kind == Order.PURCHASE_ORDER else 'Customer'
+        return Report(title, rng.label, ['Order', who, 'Item', 'Ordered', 'Done', 'Remaining', 'Unit'], 'lllrrrl', rows, None, landscape=True,
+                      weights=[1.3, 2.5, 3, 1, 1, 1.2, 0.8])
+    return build
+
+
 REPORTS = {r.slug: r for r in [
     ReportDef('sales', 'Sales register', 'All sale invoices with received amount and balance.', _register(Invoice.SALE, 'Sales register')),
     ReportDef('purchases', 'Purchase register', 'All purchase bills with paid amount and balance.', _register(Invoice.PURCHASE, 'Purchase register')),
@@ -123,6 +145,11 @@ REPORTS = {r.slug: r for r in [
     ReportDef('receivables', 'Receivables', 'Customers who owe you, as of the end date.', _outstanding(True)),
     ReportDef('payables', 'Payables', 'Vendors you owe, as of the end date.', _outstanding(False)),
     ReportDef('payments', 'Payments register', 'Money received and paid.', _payments),
+    ReportDef('quotations', 'Quotations register', 'All quotations with status.', _order_register(Order.QUOTATION, 'Quotations register'), feature='quotations'),
+    ReportDef('sales-orders', 'Sales orders register', 'All sales orders with delivery status.', _order_register(Order.SALES_ORDER, 'Sales orders register'), feature='sales_orders'),
+    ReportDef('pending-sales-orders', 'Pending sales orders', 'Items still to be delivered / invoiced to customers.', _pending_items(Order.SALES_ORDER, 'Pending sales orders'), feature='sales_orders'),
+    ReportDef('purchase-orders', 'Purchase orders register', 'All purchase orders with receipt status.', _order_register(Order.PURCHASE_ORDER, 'Purchase orders register'), feature='purchase_orders'),
+    ReportDef('pending-purchase-orders', 'Pending purchase orders', 'Items ordered from vendors and not yet received.', _pending_items(Order.PURCHASE_ORDER, 'Pending purchase orders'), feature='purchase_orders'),
     ReportDef('stock-summary', 'Stock summary', 'Quantity in hand and value for every item.', _stock_summary, feature='stock'),
     ReportDef('low-stock', 'Low stock items', 'Items at or below their low-stock level.', _low_stock, feature='stock'),
     ReportDef('stock-moves', 'Stock movements', 'Every stock in and out in the chosen dates.', _stock_moves, feature='stock'),

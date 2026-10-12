@@ -43,6 +43,7 @@ class Product(TenantModel):
     sku = models.CharField('SKU / code', max_length=40, blank=True)
     unit = models.ForeignKey('tenants.Unit', on_delete=models.PROTECT)
     price = models.DecimalField('default rate', max_digits=14, decimal_places=2, default=0)
+    barcode = models.CharField(max_length=64, blank=True, db_index=True, help_text='For scanners at the POS. Leave empty if you do not use barcodes.')
     track_stock = models.BooleanField('track stock', default=True, help_text='Turn off for services or things you do not count.')
     reorder_level = models.DecimalField('low-stock level', max_digits=14, decimal_places=3, default=0,
                                         help_text='Alert when stock falls to this quantity or below.')
@@ -78,7 +79,11 @@ class Invoice(TenantModel):
     date = models.DateField(default=timezone.localdate)
     due_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    order = models.ForeignKey('Order', null=True, blank=True, on_delete=models.SET_NULL, related_name='invoices',
+                              help_text='The quotation / order this invoice was created from.')
+    pos_session = models.ForeignKey('PosSession', null=True, blank=True, on_delete=models.SET_NULL, related_name='sales')
     warehouse = models.ForeignKey(Warehouse, null=True, blank=True, on_delete=models.PROTECT, related_name='invoices',
                                   help_text='Where the stock comes from / goes to.')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
@@ -103,7 +108,7 @@ class Invoice(TenantModel):
         super().save(*args, **kwargs)
 
     def recalculate(self):
-        self.total = sum((i.amount for i in self.items.all()), Decimal('0'))
+        self.total = max(sum((i.amount for i in self.items.all()), Decimal('0')) - (self.discount or 0), Decimal('0'))
         self.save(update_fields=['total'])
 
     @property
@@ -129,6 +134,7 @@ class InvoiceItem(models.Model):
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     unit = models.ForeignKey('tenants.Unit', on_delete=models.PROTECT)
     rate = models.DecimalField(max_digits=14, decimal_places=2)
+    order_item = models.ForeignKey('OrderItem', null=True, blank=True, on_delete=models.SET_NULL, related_name='invoice_items')
 
     @property
     def amount(self):
@@ -138,7 +144,7 @@ class InvoiceItem(models.Model):
 class Payment(TenantModel):
     IN, OUT = 'in', 'out'
     DIRECTIONS = [(IN, 'Received from customer'), (OUT, 'Paid to vendor')]
-    METHODS = [('cash', 'Cash'), ('bank', 'Bank transfer'), ('cheque', 'Cheque'), ('other', 'Other')]
+    METHODS = [('cash', 'Cash'), ('card', 'Card'), ('bank', 'Bank transfer'), ('cheque', 'Cheque'), ('other', 'Other')]
 
     party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='payments')
     direction = models.CharField(max_length=3, choices=DIRECTIONS)
@@ -209,3 +215,127 @@ class StockMove(TenantModel):
     @property
     def qty_out(self):
         return -self.quantity if self.quantity < 0 else None
+
+
+class Order(TenantModel):
+    """Quotation, sales order or purchase order. These never touch the ledger or stock; the invoice / bill made from them does."""
+    QUOTATION, SALES_ORDER, PURCHASE_ORDER = 'quotation', 'sales_order', 'purchase_order'
+    KINDS = [(QUOTATION, 'Quotation'), (SALES_ORDER, 'Sales order'), (PURCHASE_ORDER, 'Purchase order')]
+    DRAFT, SENT, ACCEPTED, REJECTED, CONVERTED, OPEN, CANCELLED = 'draft', 'sent', 'accepted', 'rejected', 'converted', 'open', 'cancelled'
+    STATUSES = [(DRAFT, 'Draft'), (SENT, 'Sent'), (ACCEPTED, 'Accepted'), (REJECTED, 'Rejected'), (CONVERTED, 'Converted'),
+                (OPEN, 'Open'), (CANCELLED, 'Cancelled')]
+
+    kind = models.CharField(max_length=16, choices=KINDS)
+    number = models.PositiveIntegerField(blank=True)
+    party = models.ForeignKey(Party, on_delete=models.PROTECT, related_name='orders')
+    date = models.DateField(default=timezone.localdate)
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUSES, blank=True)
+    notes = models.TextField(blank=True)
+    terms = models.TextField(blank=True)
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    source = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='children')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-number']
+        constraints = [models.UniqueConstraint(fields=['tenant', 'kind', 'number'], name='unique_order_number')]
+
+    def __str__(self):
+        return self.code
+
+    @property
+    def code(self):
+        t = self.tenant
+        prefix = {self.QUOTATION: t.quote_prefix, self.SALES_ORDER: t.so_prefix, self.PURCHASE_ORDER: t.po_prefix}[self.kind]
+        return f'{prefix}-{self.number:04d}'
+
+    @property
+    def is_quote(self):
+        return self.kind == self.QUOTATION
+
+    @property
+    def due_label(self):
+        return {self.QUOTATION: 'Valid until', self.SALES_ORDER: 'Delivery date', self.PURCHASE_ORDER: 'Expected on'}[self.kind]
+
+    def save(self, *args, **kwargs):
+        if self.number is None:
+            last = Order.objects.filter(tenant=self.tenant, kind=self.kind).aggregate(m=Max('number'))['m']
+            self.number = (last or 0) + 1
+        if not self.status:
+            self.status = self.DRAFT if self.is_quote else self.OPEN
+        super().save(*args, **kwargs)
+
+    def recalculate(self):
+        self.total = sum((i.amount for i in self.items.all()), Decimal('0'))
+        self.save(update_fields=['total'])
+
+    @property
+    def is_expired(self):
+        return self.is_quote and self.status in (self.DRAFT, self.SENT) and bool(self.due_date) and self.due_date < timezone.localdate()
+
+    @property
+    def fulfilment(self):
+        """Open / Partial / Completed for sales and purchase orders (based on how much has been invoiced)."""
+        if self.status == self.CANCELLED:
+            return 'Cancelled'
+        items = list(self.items.all())
+        if not items or not any(i.invoiced_qty > 0 for i in items):
+            return 'Open'
+        return 'Completed' if all(i.invoiced_qty >= i.quantity for i in items) else 'Partial'
+
+    @property
+    def display_status(self):
+        if self.is_quote:
+            return 'Expired' if self.is_expired else self.get_status_display()
+        return self.fulfilment
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    unit = models.ForeignKey('tenants.Unit', on_delete=models.PROTECT)
+    rate = models.DecimalField(max_digits=14, decimal_places=2)
+    invoiced_qty = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+
+    @property
+    def amount(self):
+        return (self.quantity * self.rate).quantize(CENT)
+
+    @property
+    def remaining(self):
+        return max(self.quantity - self.invoiced_qty, Decimal('0'))
+
+
+class PosSession(TenantModel):
+    """One cashier shift: opened with some cash in the drawer, closed with a count."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='pos_sessions')
+    opened_at = models.DateTimeField(default=timezone.now)
+    opening_cash = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closing_cash = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, help_text='Cash counted in the drawer at closing.')
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ['-opened_at']
+
+    def __str__(self):
+        return f'Shift {self.opened_at:%d %b %H:%M}'
+
+    @property
+    def is_open(self):
+        return self.closed_at is None
+
+    def summary(self):
+        """Totals for the shift: sales, discounts, money by method, and the cash that should be in the drawer."""
+        sales = self.sales.aggregate(n=models.Count('id'), total=Sum('total'), discount=Sum('discount'))
+        by_method = {code: Decimal('0') for code, _ in Payment.METHODS}
+        for row in Payment.objects.filter(invoice__pos_session=self, direction=Payment.IN).values('method').annotate(s=Sum('amount')):
+            by_method[row['method']] = row['s']
+        expected = self.opening_cash + by_method['cash']
+        return {'count': sales['n'] or 0, 'total': sales['total'] or Decimal('0'), 'discount': sales['discount'] or Decimal('0'),
+                'by_method': [(label, by_method[code]) for code, label in Payment.METHODS if by_method[code]],
+                'received': sum(by_method.values(), Decimal('0')), 'expected_cash': expected,
+                'difference': (self.closing_cash - expected) if self.closing_cash is not None else None}

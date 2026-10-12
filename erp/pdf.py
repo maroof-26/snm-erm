@@ -100,10 +100,32 @@ def invoice_pdf(invoice):
     story += [_p(' | '.join(meta), CELL), Spacer(1, 4 * mm)]
     rows = [[i + 1, it.product.name, qty(it.quantity), it.unit.symbol, money(it.rate), money(it.amount)]
             for i, it in enumerate(invoice.items.select_related('product', 'unit'))]
+    if invoice.discount:
+        rows.append(['', 'Discount', '', '', '', f'-{money(invoice.discount)}'])
     story.append(_table(['#', 'Item', 'Qty', 'Unit', 'Rate', 'Amount'], rows, 'llrlrr', A4[0] - 28 * mm,
                         ['', 'Total', '', '', '', f'{tenant.currency_symbol} {money(invoice.total)}'], [0.4, 4, 1, 1, 1, 1]))
     story.append(Spacer(1, 3 * mm))
     story.append(_p(f'Paid: {tenant.currency_symbol} {money(invoice.paid)}    Balance: {tenant.currency_symbol} {money(invoice.balance)}', CELL_B))
     if invoice.notes:
         story += [Spacer(1, 3 * mm), _p(f'Notes: {invoice.notes}', CELL)]
+    return _build(story, A4)
+
+
+def order_pdf(order):
+    tenant = order.tenant
+    buying = order.kind == order.PURCHASE_ORDER
+    story = _header(tenant, f'{order.get_kind_display()} {order.code}', None)
+    meta = [f'{"Vendor" if buying else "Customer"}: {order.party.name}', f'Date: {order.date:%d %b %Y}']
+    if order.party.phone:
+        meta.insert(1, f'Phone: {order.party.phone}')
+    if order.due_date:
+        meta.append(f'{order.due_label}: {order.due_date:%d %b %Y}')
+    story += [_p(' | '.join(meta), CELL), Spacer(1, 4 * mm)]
+    rows = [[i + 1, it.product.name, qty(it.quantity), it.unit.symbol, money(it.rate), money(it.amount)]
+            for i, it in enumerate(order.items.select_related('product', 'unit'))]
+    story.append(_table(['#', 'Item', 'Qty', 'Unit', 'Rate', 'Amount'], rows, 'llrlrr', A4[0] - 28 * mm,
+                        ['', 'Total', '', '', '', f'{tenant.currency_symbol} {money(order.total)}'], [0.4, 4, 1, 1, 1, 1]))
+    for label, text in (('Notes', order.notes), ('Terms & conditions', order.terms)):
+        if text:
+            story += [Spacer(1, 4 * mm), _p(label, CELL_B), _p(text, CELL)]
     return _build(story, A4)

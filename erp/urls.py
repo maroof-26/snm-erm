@@ -1,6 +1,8 @@
 from django.urls import path
 
 from . import views as v
+from . import views_orders as vo
+from . import views_pos as vp
 
 urlpatterns = [
     path('', v.dashboard, name='dashboard'),
@@ -19,6 +21,13 @@ urlpatterns = [
     path('payments/new/', v.PaymentCreate.as_view(), name='payment_new'),
     path('payments/<int:pk>/edit/', v.PaymentUpdate.as_view(), name='payment_edit'),
     path('payments/<int:pk>/delete/', v.PaymentDelete.as_view(), name='payment_delete'),
+
+    path('pos/', vp.pos_home, name='pos_home'),
+    path('pos/open/', vp.pos_open, name='pos_open'),
+    path('pos/checkout/', vp.pos_checkout, name='pos_checkout'),
+    path('pos/receipt/<int:pk>/', vp.pos_receipt, name='pos_receipt'),
+    path('pos/shift/', vp.pos_shift, name='pos_shift'),
+    path('pos/shift/<int:pk>/', vp.pos_shift_detail, name='pos_shift_detail'),
 
     path('stock/', v.stock_overview, name='stock_overview'),
     path('stock/moves/', v.stock_moves, name='stock_moves'),
@@ -49,4 +58,17 @@ for kind, prefix in (('sale', 'sales'), ('purchase', 'purchases')):
         path(f'{prefix}/<int:pk>/edit/', v.invoice_form, {'kind': kind}, name=f'{kind}_edit'),
         path(f'{prefix}/<int:pk>/delete/', v.invoice_delete, {'kind': kind}, name=f'{kind}_delete'),
         path(f'{prefix}/<int:pk>/pdf/', v.invoice_pdf, {'kind': kind}, name=f'{kind}_pdf'),
+    ]
+
+# quotations / sales orders / purchase orders
+for kind, prefix in (('quotation', 'quotations'), ('sales_order', 'sales-orders'), ('purchase_order', 'purchase-orders')):
+    urlpatterns += [
+        path(f'{prefix}/', vo.order_list, {'kind': kind}, name=f'{kind}_list'),
+        path(f'{prefix}/new/', vo.order_form, {'kind': kind}, name=f'{kind}_new'),
+        path(f'{prefix}/<int:pk>/', vo.order_detail, {'kind': kind}, name=f'{kind}_detail'),
+        path(f'{prefix}/<int:pk>/edit/', vo.order_form, {'kind': kind}, name=f'{kind}_edit'),
+        path(f'{prefix}/<int:pk>/delete/', vo.order_delete, {'kind': kind}, name=f'{kind}_delete'),
+        path(f'{prefix}/<int:pk>/pdf/', vo.order_pdf, {'kind': kind}, name=f'{kind}_pdf'),
+        path(f'{prefix}/<int:pk>/status/', vo.order_status, {'kind': kind}, name=f'{kind}_status'),
+        path(f'{prefix}/<int:pk>/convert/', vo.order_convert, {'kind': kind}, name=f'{kind}_convert'),
     ]

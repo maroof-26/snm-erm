@@ -271,3 +271,8 @@ body { font-size: 1rem; }
   .action-row.compact .btn i { display: none; }
   .seg label { padding: .55rem .4rem; font-size: .92rem; }
 }
+.action-row.wrap { flex-wrap: wrap !important; }
+.action-row.wrap .btn { flex: 0 0 auto !important; }
+.d-contents { display: contents; }
+@media (max-width: 767.98px) { .action-row.wrap .btn { flex: 1 1 auto !important; } }
+.sidebar .nav-link.nav-pos { background: rgba(255,196,0,.14); color: #ffd84d !important; font-weight: 600; margin-bottom: .15rem; }

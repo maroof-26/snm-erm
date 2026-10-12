@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Invoice, InvoiceItem, LedgerEntry, Party, Payment, Product, StockMove, Warehouse
+from .models import Order, OrderItem, Invoice, InvoiceItem, LedgerEntry, Party, Payment, Product, StockMove, Warehouse
 
 
 class TenantAdmin(admin.ModelAdmin):
@@ -55,3 +55,16 @@ class StockMoveAdmin(TenantAdmin):
     list_display = ['date', 'tenant', 'product', 'warehouse', 'quantity', 'kind', 'invoice']
     list_filter = ['tenant', 'kind', 'warehouse']
     search_fields = ['product__name', 'reason', 'note']
+
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+
+
+@admin.register(Order)
+class OrderAdmin(TenantAdmin):
+    list_display = ['__str__', 'tenant', 'party', 'date', 'status', 'total']
+    list_filter = ['tenant', 'kind', 'status']
+    inlines = [OrderItemInline]
+    readonly_fields = ['total']

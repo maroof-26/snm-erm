@@ -47,7 +47,7 @@ class TenantAdmin(admin.ModelAdmin):
             ('Modules', {'fields': ['features']}),
             ('Units of measure', {'fields': ['units', 'default_unit']}),
             ('Stock', {'fields': ['allow_negative_stock']}),
-            ('Business details', {'fields': ['currency_symbol', 'sale_prefix', 'purchase_prefix', 'phone', 'address']}),
+            ('Business details', {'fields': ['currency_symbol', 'sale_prefix', 'purchase_prefix', 'quote_prefix', 'so_prefix', 'po_prefix', 'default_terms', 'receipt_footer', 'phone', 'address']}),
         ]
         if obj is None:
             fieldsets.append(('Owner login (optional)', {'fields': ['owner_username', 'owner_email', 'owner_password']}))

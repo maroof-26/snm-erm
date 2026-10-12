@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.forms import inlineformset_factory
 from django.db.models import ProtectedError, Q, Sum
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -18,9 +19,10 @@ from tenants.access import check_access, tenant_view
 
 from . import pdf, queries, stock
 from .daterange import get_range, range_context
-from .forms import (InvoiceForm, ItemFormSet, LedgerEntryForm, PartyForm, PaymentForm, ProductForm, StockAdjustForm, StockTransferForm,
+from . import orders as order_logic
+from .forms import (InvoiceForm, ItemFormSet, PrefilledItemForm, LedgerEntryForm, PartyForm, PaymentForm, ProductForm, StockAdjustForm, StockTransferForm,
                     WarehouseForm)
-from .models import Invoice, LedgerEntry, Party, Payment, Product, StockMove, Warehouse
+from .models import Invoice, InvoiceItem, LedgerEntry, Order, Party, Payment, Product, StockMove, Warehouse
 from .reports import REPORTS
 
 KIND_FEATURE = {Invoice.SALE: 'sales', Invoice.PURCHASE: 'purchases'}
@@ -169,7 +171,7 @@ class ProductList(TenantViewMixin, ListView):
     def get_queryset(self):
         qs = super().get_queryset().select_related('unit')
         q = self.request.GET.get('q')
-        return qs.filter(Q(name__icontains=q) | Q(sku__icontains=q)) if q else qs
+        return qs.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode__icontains=q)) if q else qs
 
     def get_context_data(self, **kw):
         page, qs = paginate(self.request, self.object_list)
@@ -302,15 +304,25 @@ def invoice_form(request, kind, pk=None):
     if denied:
         return denied
     tenant = request.tenant
+    src, initial = None, []
     if pk:
         invoice = get_object_or_404(_invoice_qs(request, kind).select_related('tenant'), pk=pk)
     else:
         invoice = Invoice(tenant=tenant, kind=kind, created_by=request.user)
+        want = [Order.PURCHASE_ORDER] if kind == Invoice.PURCHASE else [Order.QUOTATION, Order.SALES_ORDER]
+        oid = request.GET.get('from_order')
+        src = Order.objects.filter(pk=oid, tenant=tenant, kind__in=want).select_related('party').first() if oid and oid.isdigit() else None
+        if src:
+            invoice.order, invoice.party = src, src.party
+            initial = order_logic.prefill_rows(src)
+    FormSet = ItemFormSet
+    if src and initial:
+        FormSet = inlineformset_factory(Invoice, InvoiceItem, form=PrefilledItemForm, extra=len(initial), min_num=0, can_delete=True)
     form = InvoiceForm(request.POST or None, instance=invoice, tenant=tenant)
-    formset = ItemFormSet(request.POST or None, instance=invoice, form_kwargs={'tenant': tenant})
+    formset = FormSet(request.POST or None, instance=invoice, form_kwargs={'tenant': tenant}, **({'initial': initial} if initial else {}))
     if request.method == 'POST' and form.is_valid() and formset.is_valid():
         total = sum((f.cleaned_data['quantity'] * f.cleaned_data['rate'] for f in formset.forms
-                     if f.cleaned_data and not f.cleaned_data.get('DELETE')), Decimal('0'))
+                     if f.cleaned_data and not f.cleaned_data.get('DELETE')), Decimal('0')) - (form.cleaned_data.get('discount') or 0)
         paid = form.cleaned_data.get('paid_now') or 0
         short = []
         if kind == Invoice.SALE and 'stock' in tenant.enabled_features():
@@ -343,7 +355,7 @@ def invoice_form(request, kind, pk=None):
             return redirect(f'{kind}_detail', pk=invoice.pk)
     products = {p.pk: {'rate': float(p.price), 'unit': p.unit_id} for p in Product.objects.filter(tenant=tenant)}
     return render(request, 'erp/invoice_form.html', {
-        'kind': kind, 'invoice': invoice, 'form': form, 'formset': formset,
+        'kind': kind, 'invoice': invoice, 'form': form, 'formset': formset, 'from_order': src,
         'products_json': json.dumps(products), 'title': ('Edit ' if pk else 'New ') + KIND_LABEL[kind].lower()[:-1]})
 
 

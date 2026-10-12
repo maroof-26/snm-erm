@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load erp_extras %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="h4 mb-0">{{ title }}</h1><div class="range-note">{{ rng.note }}</div></div>
+  <div class="head-actions">{% include "erp/_range_select.html" %}<a href="{% url kind|add:'_new' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> New</a></div>
+</div>
+<form method="get" id="flt" class="mb-3">
+  {% if rng.key != 'all' or request.GET.range %}<input type="hidden" name="range" value="{{ rng.key }}">{% endif %}
+  {% if request.GET.from %}<input type="hidden" name="from" value="{{ request.GET.from }}">{% endif %}{% if request.GET.to %}<input type="hidden" name="to" value="{{ request.GET.to }}">{% endif %}
+  <div class="d-flex gap-2 align-items-center">
+    <div class="search-box flex-grow-1"><i class="bi bi-search"></i><input name="q" class="form-control" placeholder="Search {{ party_label|lower }}, number…" value="{{ request.GET.q }}"></div>
+    <button type="button" class="btn btn-outline-secondary filter-btn d-md-none" data-bs-toggle="offcanvas" data-bs-target="#filterSheet" aria-label="Filters"><i class="bi bi-funnel"></i>{% if filters_active %}<span class="fbadge">{{ filters_active }}</span>{% endif %}</button>
+    <div class="offcanvas-md offcanvas-bottom filter-sheet" tabindex="-1" id="filterSheet" aria-label="Filters">
+      <div class="offcanvas-header d-md-none"><h5 class="offcanvas-title">Filters</h5><a class="clear-link" href="?{{ clear_qs }}">Clear</a></div>
+      <div class="offcanvas-body d-md-flex align-items-center gap-2 p-md-0">
+        <div class="mb-3 mb-md-0"><label class="form-label d-md-none">{{ party_label }}</label>
+          <select name="party" class="form-select"><option value="">All</option>{% for p in parties %}<option value="{{ p.pk }}" {% if request.GET.party == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
+        <div class="mb-3 mb-md-0"><label class="form-label d-md-none">Status</label>
+          <select name="status" class="form-select"><option value="">Any status</option>{% for v, label in status_options %}<option value="{{ v }}" {% if request.GET.status == v %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <button class="btn btn-primary w-100 d-md-none">Show results</button>
+      </div>
+    </div>
+  </div>
+</form>
+<script>document.getElementById('flt').addEventListener('change', function () { if (window.matchMedia('(min-width: 768px)').matches) this.submit(); });</script>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead><tr><th>No.</th><th class="d-none d-md-table-cell">Date</th><th>{{ party_label }}</th><th class="d-none d-md-table-cell">Due / valid</th><th class="num">Total</th><th class="d-none d-md-table-cell">Status</th></tr></thead>
+  <tbody>{% for o in page %}<tr onclick="location='{% url kind|add:'_detail' o.pk %}'" style="cursor:pointer">
+    <td class="text-nowrap"><a href="{% url kind|add:'_detail' o.pk %}">{{ o.code }}</a></td>
+    <td class="d-none d-md-table-cell text-nowrap">{{ o.date|date:"d M Y" }}</td>
+    <td>{{ o.party.name }}<div class="d-md-none small text-muted">{{ o.date|date:"d M Y" }}</div></td>
+    <td class="d-none d-md-table-cell text-nowrap">{% if o.due_date %}{{ o.due_date|date:"d M Y" }}{% else %}&ndash;{% endif %}</td>
+    <td class="num">{{ o.total|money }}<div class="d-md-none"><span class="badge text-bg-{{ o.display_status|status_color }}">{{ o.display_status }}</span></div></td>
+    <td class="d-none d-md-table-cell"><span class="badge text-bg-{{ o.display_status|status_color }}">{{ o.display_status }}</span></td>
+  </tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">Nothing here yet. Tap <b>New</b> to create one.</td></tr>{% endfor %}</tbody>
+  <tfoot class="table-light"><tr><th colspan="2" class="d-md-none">Total ({{ count }})</th><th colspan="4" class="d-none d-md-table-cell">Total ({{ count }})</th><th class="num d-md-none">{{ total|money }}</th><th class="num d-none d-md-table-cell">{{ total|money }}</th><th class="d-none d-md-table-cell"></th></tr></tfoot>
+</table></div></div>
+{% include "erp/_pagination.html" %}
+{% endblock %}
